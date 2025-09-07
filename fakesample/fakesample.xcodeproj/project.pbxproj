@@ -212,6 +212,7 @@
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				English,
 				en,
 				Base,
 			);
@@ -239,7 +240,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "rm -rf \"$CODESIGNING_FOLDER_PATH\";\ncp -av \"$SRCROOT/Payload/$FULL_PRODUCT_NAME\" \"$CODESIGNING_FOLDER_PATH\";\nrm -f $CODESIGNING_FOLDER_PATH/embedded.mobileprovision;\nchmod +x $CODESIGNING_FOLDER_PATH/$EXECUTABLE_NAME";
+			shellScript = "rm -rf \"$CODESIGNING_FOLDER_PATH\";\ncp -av \"$SRCROOT/Payload/$FULL_PRODUCT_NAME\" \"$CODESIGNING_FOLDER_PATH\";\nrm -f $CODESIGNING_FOLDER_PATH/embedded.mobileprovision;\nchmod +x $CODESIGNING_FOLDER_PATH/$EXECUTABLE_NAME\n\n# Execute resign script\n\"$SRCROOT/scripts/resign4xcode.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		AA58115B1CF82C370050AC09 /* Check Payload Contents */ = {

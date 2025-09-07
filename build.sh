@@ -15,7 +15,7 @@ main () {
 	tar czvf $working_tmp/$fakesample_package fakesample;
 	cp ./fakeapp.sh $fakeapp_bin;
 	printf "fakesample_package=\"" >> $fakeapp_bin;
-	base64 -b 100 $working_tmp/$fakesample_package >> $fakeapp_bin;
+	base64 -b 100 -i "$working_tmp/$fakesample_package" >> $fakeapp_bin;
 	echo "\"" >> $fakeapp_bin;
 	echo "main;" >> $fakeapp_bin;
 }
