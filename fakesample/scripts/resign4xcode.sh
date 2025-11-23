@@ -5,7 +5,10 @@
 
 APP_DIR="$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app"
 FRAMEWORKS_DIR="$APP_DIR/Frameworks"
-CODESIGN_IDENTITY="$CODE_SIGN_IDENTITY"
+
+echo  "-------------------------andysheng------"
+# env
+echo  "$EXPANDED_CODE_SIGN_IDENTITY"
 
 if [ ! -d "$FRAMEWORKS_DIR" ]; then
     echo "Error: Frameworks directory not found: $FRAMEWORKS_DIR"
@@ -32,12 +35,12 @@ echo "Re-signing frameworks in $FRAMEWORKS_DIR..."
 
 find "$FRAMEWORKS_DIR" -name "*.framework" -type d | while read framework; do
     echo "Signing: $framework"
-    codesign -fs "$CODESIGN_IDENTITY" "$framework"
+    codesign -fs "$EXPANDED_CODE_SIGN_IDENTITY" "$framework"
 done
 
 find "$FRAMEWORKS_DIR" -name "*.dylib" -type f | while read dylib; do
     echo "Signing: $dylib"
-    codesign -fs "$CODESIGN_IDENTITY" "$dylib"
+    codesign -fs "$EXPANDED_CODE_SIGN_IDENTITY" "$dylib"
 done
 
 echo "Done re-signing frameworks."
