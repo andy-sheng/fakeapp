@@ -17,6 +17,8 @@
 		AA5811781CF846EA0050AC09 /* PDebugEntry.m in Sources */ = {isa = PBXBuildFile; fileRef = AA5811741CF846EA0050AC09 /* PDebugEntry.m */; };
 		E16D62F02ED351FA008B628A /* LookinServer.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E16D62EE2ED351FA008B628A /* LookinServer.framework */; };
 		E16D62F12ED35204008B628A /* LookinServer.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = E16D62EE2ED351FA008B628A /* LookinServer.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		E17D2A882EDC820D0076FEB0 /* BundleIDHook.h in Headers */ = {isa = PBXBuildFile; fileRef = E17D2A862EDC820D0076FEB0 /* BundleIDHook.h */; };
+		E17D2A892EDC820D0076FEB0 /* BundleIDHook.m in Sources */ = {isa = PBXBuildFile; fileRef = E17D2A872EDC820D0076FEB0 /* BundleIDHook.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -60,6 +62,8 @@
 		AA5811741CF846EA0050AC09 /* PDebugEntry.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PDebugEntry.m; sourceTree = "<group>"; };
 		AA58117A1CF8486C0050AC09 /* Payload */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Payload; sourceTree = "<group>"; };
 		E16D62EE2ED351FA008B628A /* LookinServer.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = LookinServer.framework; sourceTree = "<group>"; };
+		E17D2A862EDC820D0076FEB0 /* BundleIDHook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BundleIDHook.h; sourceTree = "<group>"; };
+		E17D2A872EDC820D0076FEB0 /* BundleIDHook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BundleIDHook.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -126,10 +130,12 @@
 		AA5811651CF846B10050AC09 /* PDebug */ = {
 			isa = PBXGroup;
 			children = (
+				E17D2A862EDC820D0076FEB0 /* BundleIDHook.h */,
+				E17D2A872EDC820D0076FEB0 /* BundleIDHook.m */,
+				AA5811681CF846B10050AC09 /* Info.plist */,
 				AA5811791CF846F10050AC09 /* Libs */,
 				AA5811731CF846EA0050AC09 /* PDebugEntry.h */,
 				AA5811741CF846EA0050AC09 /* PDebugEntry.m */,
-				AA5811681CF846B10050AC09 /* Info.plist */,
 			);
 			path = PDebug;
 			sourceTree = "<group>";
@@ -158,6 +164,7 @@
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E17D2A882EDC820D0076FEB0 /* BundleIDHook.h in Headers */,
 				AA5811771CF846EA0050AC09 /* PDebugEntry.h in Headers */,
 				AA5811761CF846EA0050AC09 /* fishhook.h in Headers */,
 			);
@@ -322,6 +329,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA5811751CF846EA0050AC09 /* fishhook.c in Sources */,
+				E17D2A892EDC820D0076FEB0 /* BundleIDHook.m in Sources */,
 				AA5811781CF846EA0050AC09 /* PDebugEntry.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
