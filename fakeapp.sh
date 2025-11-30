@@ -132,9 +132,9 @@ copy_app_to_payload () {
 		rm -rf "$target_app_path/Extensions" || true;
 	fi
 
-	# Remove all .DS_Store files from the copied .app bundle
-	echo "> Removing .DS_Store files from .app bundle";
-	find "$target_app_path" -name ".DS_Store" -type f -delete 2>/dev/null || true;
+	# Remove all .DS_Store files from entire Payload directory (including .app bundle)
+	echo "> Removing all .DS_Store files from Payload directory";
+	find "$payload_dir" -name ".DS_Store" -type f -delete 2>/dev/null || true;
 
 	return 0;
 }
