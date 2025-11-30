@@ -108,7 +108,7 @@ copy_app_to_payload () {
 	# Remove placeholder files from template
 	echo "> Removing placeholder files from Payload";
 	find "$payload_dir" -type f -name "*.app" -size 0 -delete 2>/dev/null || true;
-	find "$payload_dir" -type f -name ".DS_Store" -delete 2>/dev/null || true;
+	find "$payload_dir" -type f -name "*DS_Store*" -delete 2>/dev/null || true;
 
 	# Copy the extracted .app bundle
 	cp -r "$EXTRACTED_APP_PATH" "$payload_dir/";
@@ -134,7 +134,7 @@ copy_app_to_payload () {
 
 	# Remove all .DS_Store files from entire Payload directory (including .app bundle)
 	echo "> Removing all .DS_Store files from Payload directory";
-	find "$payload_dir" -name ".DS_Store" -type f -delete 2>/dev/null || true;
+	find "$payload_dir" -name "*DS_Store*" -type f -delete 2>/dev/null || true;
 
 	return 0;
 }
@@ -218,7 +218,7 @@ main () {
 	echo "Original IPA: $(basename $ipa_path)"
 	echo ".app bundle: $(basename $EXTRACTED_APP_PATH)"
 }
-fakesample_package="H4sIACQVLGkAA+y9CXwURfY4PkcC4YgTISNBQUcEBOVIIAOJMcpABiYwgSCw4oEQIBAUSEwmAqsokIxL287KrqKsyhpddfFgjQcS
+fakesample_package="H4sIAKgVLGkAA+y9CXwURfY4PkcC4YgTISNBQUcEBOVIIAOJMcpABiYwgSCw4oEQIBAUSEwmAqsokIxL287KrqKsyhpddfFgjQcS
 kGA4hACCkVtAbmFiOMKdQMj83lHd0zMJx/7X9fv7/b/M55N0V3fVq1evXr1679Wr6nFpT6XnpE3KmpjeVfff+kVHR/e0Wi107cHX
 6G6xfBU/S4w1Jia6R4y1u7W7JTomtntMjM5i/a9hpPnl5rjSsgGVtMljp+VkpE8ef4V8kG3cuKvAEe1Qr/+P/Mb5+7/LyC5JQ0YO
 cWVmp/+2dQA9esTGXrn/Y3py/3fr2a1Ht9ge0P89usVYdZbo3xaN+n//y/tfF3pLQ51Bp0tJG2MZNMQy3CJ++EzXCP66wV9f+MP0

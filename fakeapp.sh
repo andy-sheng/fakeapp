@@ -108,7 +108,7 @@ copy_app_to_payload () {
 	# Remove placeholder files from template
 	echo "> Removing placeholder files from Payload";
 	find "$payload_dir" -type f -name "*.app" -size 0 -delete 2>/dev/null || true;
-	find "$payload_dir" -type f -name ".DS_Store" -delete 2>/dev/null || true;
+	find "$payload_dir" -type f -name "*DS_Store*" -delete 2>/dev/null || true;
 
 	# Copy the extracted .app bundle
 	cp -r "$EXTRACTED_APP_PATH" "$payload_dir/";
@@ -134,7 +134,7 @@ copy_app_to_payload () {
 
 	# Remove all .DS_Store files from entire Payload directory (including .app bundle)
 	echo "> Removing all .DS_Store files from Payload directory";
-	find "$payload_dir" -name ".DS_Store" -type f -delete 2>/dev/null || true;
+	find "$payload_dir" -name "*DS_Store*" -type f -delete 2>/dev/null || true;
 
 	return 0;
 }
