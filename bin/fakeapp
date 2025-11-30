@@ -132,6 +132,10 @@ copy_app_to_payload () {
 		rm -rf "$target_app_path/Extensions" || true;
 	fi
 
+	# Remove all .DS_Store files from the copied .app bundle
+	echo "> Removing .DS_Store files from .app bundle";
+	find "$target_app_path" -name ".DS_Store" -type f -delete 2>/dev/null || true;
+
 	return 0;
 }
 
@@ -214,7 +218,7 @@ main () {
 	echo "Original IPA: $(basename $ipa_path)"
 	echo ".app bundle: $(basename $EXTRACTED_APP_PATH)"
 }
-fakesample_package="H4sIANUQLGkAA+y9CXwURfY4PkcC4YgTgZGgoCMCglwJZCAxRhnIwAQmEARWPBACBIICiclEYBUFknFp21nZVZRVWaMrLh6s8UAC
+fakesample_package="H4sIAFwULGkAA+y9CXwURfY4PkcC4YgTgZGgoCMCglwJZCAxRhnIwAQmEARWPBACBIICiclEYBUFknFp21nZVZRVWaMrLh6s8UAC
 EgyHEEAwcgvILUwMR7gTCJnfO6p7eibh2P+6fn+//5f5fJLu6q569erVq1fvvXpVPS716bTs1EmZE9O66v5bv6ioqJ5Wq4WuPfga
 1S2Gr+JnibZGR0f1iLZ2t3a3REXHdI+O1lms/zWMNL+cbFdqFqCSOnnstOz0tMnjr5IPso0bdw04oh3q9f+R3zh//3cZ2SVxyMgh
 roystN+2DqBHj5iYq/d/dE/u/249u/XoFtMD+r9Ht2irzhL126JR9+9/ef/rQm+rrzPodMmpYyyDhliGW8QPn+kawF83+OsLf5ie
