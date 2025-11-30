@@ -9,17 +9,12 @@
 #import "PDebugEntry.h"
 #import <objc/runtime.h>
 #import <dlfcn.h>
-#import <CoreFoundation/CoreFoundation.h>
 #import "fishhook.h"
 
 static void * (*orig_dlsym)(void *, const char *);
 
 // Original Bundle ID from IPA (will be set at runtime)
 static NSString *kOriginalBundleID = nil;
-
-// C function pointers
-static CFStringRef (*orig_CFBundleGetIdentifier)(CFBundleRef bundle);
-static CFTypeRef (*orig_CFBundleGetValueForInfoDictionaryKey)(CFBundleRef bundle, CFStringRef key);
 
 int my_ptrace(int _request, pid_t _pid, caddr_t _addr, int _data)
 {
@@ -33,42 +28,6 @@ void * my_dlsym(void * __handle, const char * __symbol)
     }
 
     return orig_dlsym(__handle, __symbol);
-}
-
-#pragma mark - C Function Hooks
-
-CFStringRef hook_CFBundleGetIdentifier(CFBundleRef bundle)
-{
-    // Check if it's main bundle
-    if (bundle == CFBundleGetMainBundle() && kOriginalBundleID != nil) {
-        return (__bridge CFStringRef)kOriginalBundleID;
-    }
-
-    // Call original function
-    if (orig_CFBundleGetIdentifier) {
-        return orig_CFBundleGetIdentifier(bundle);
-    }
-
-    return NULL;
-}
-
-CFTypeRef hook_CFBundleGetValueForInfoDictionaryKey(CFBundleRef bundle, CFStringRef key)
-{
-    // Call original function first
-    CFTypeRef value = NULL;
-    if (orig_CFBundleGetValueForInfoDictionaryKey) {
-        value = orig_CFBundleGetValueForInfoDictionaryKey(bundle, key);
-    }
-
-    // Check if it's main bundle querying CFBundleIdentifier
-    if (bundle == CFBundleGetMainBundle() &&
-        key != NULL &&
-        CFStringCompare(key, CFSTR("CFBundleIdentifier"), 0) == kCFCompareEqualTo &&
-        kOriginalBundleID != nil) {
-        return (__bridge CFStringRef)kOriginalBundleID;
-    }
-
-    return value;
 }
 
 #pragma mark - NSBundle Hook
@@ -175,33 +134,18 @@ CFTypeRef hook_CFBundleGetValueForInfoDictionaryKey(CFBundleRef bundle, CFString
 
 +(void)load
 {
-    // Hook dlsym for anti-debugging
     orig_dlsym = dlsym(RTLD_DEFAULT, "dlsym");
-    rebind_symbols((struct rebinding[1]){{"dlsym", my_dlsym, (void **)&orig_dlsym}}, 1);
+    rebind_symbols((struct rebinding[1]){{"dlsym", my_dlsym}}, 1);
 
     // Set original Bundle ID (TODO: read from config file)
     kOriginalBundleID = @"com.ss.iphone.ugc.Aweme";  // Example: TikTok
 
-    // Hook C functions for Bundle ID
-    rebind_symbols((struct rebinding[2]){
-        {"CFBundleGetIdentifier", hook_CFBundleGetIdentifier, (void **)&orig_CFBundleGetIdentifier},
-        {"CFBundleGetValueForInfoDictionaryKey", hook_CFBundleGetValueForInfoDictionaryKey, (void **)&orig_CFBundleGetValueForInfoDictionaryKey}
-    }, 2);
-
-    // Hook ObjC NSBundle methods
+    // Hook NSBundle methods
     [NSBundle hookBundleIdentifier];
 
     NSLog(@"[PDebug] Injected successfully");
     NSLog(@"[PDebug] Original Bundle ID set to: %@", kOriginalBundleID);
-    NSLog(@"[PDebug] ObjC methods hooked: bundleIdentifier, objectForInfoDictionaryKey:, infoDictionary");
-    NSLog(@"[PDebug] C functions hooked: CFBundleGetIdentifier, CFBundleGetValueForInfoDictionaryKey");
-    NSLog(@"[PDebug] Current Bundle ID (via ObjC): %@", [[NSBundle mainBundle] bundleIdentifier]);
-
-    // Test C API
-    CFStringRef cBundleID = CFBundleGetIdentifier(CFBundleGetMainBundle());
-    if (cBundleID) {
-        NSLog(@"[PDebug] Current Bundle ID (via C API): %@", (__bridge NSString *)cBundleID);
-    }
+    NSLog(@"[PDebug] Current Bundle ID: %@", [[NSBundle mainBundle] bundleIdentifier]);
 }
 
 @end
