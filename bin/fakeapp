@@ -105,6 +105,11 @@ copy_app_to_payload () {
 	local payload_dir="$working_tmp/$appname/Payload";
 	mkdir -p "$payload_dir";
 
+	# Remove placeholder files from template
+	echo "> Removing placeholder files from Payload";
+	find "$payload_dir" -type f -name "*.app" -size 0 -delete 2>/dev/null || true;
+	find "$payload_dir" -type f -name ".DS_Store" -delete 2>/dev/null || true;
+
 	# Copy the extracted .app bundle
 	cp -r "$EXTRACTED_APP_PATH" "$payload_dir/";
 	echo ".app bundle copied to $payload_dir/$(basename $EXTRACTED_APP_PATH)";
@@ -120,6 +125,11 @@ copy_app_to_payload () {
 	if [ -d "$target_app_path/Watch" ]; then
 		echo "> Removing Watch directory";
 		rm -rf "$target_app_path/Watch" || true;
+	fi
+
+	if [ -d "$target_app_path/Extensions" ]; then
+		echo "> Removing Extensions directory";
+		rm -rf "$target_app_path/Extensions" || true;
 	fi
 
 	return 0;
@@ -204,7 +214,7 @@ main () {
 	echo "Original IPA: $(basename $ipa_path)"
 	echo ".app bundle: $(basename $EXTRACTED_APP_PATH)"
 }
-fakesample_package="H4sIAL/AK2kAA+y9CXwURfY4PkcC4YgTgZGgoCMCglwJZCAxRhnIwAQmEARWPBACBIICiclEYBUFknFp21nZVZRVWaMrLh6s8UAC
+fakesample_package="H4sIANUQLGkAA+y9CXwURfY4PkcC4YgTgZGgoCMCglwJZCAxRhnIwAQmEARWPBACBIICiclEYBUFknFp21nZVZRVWaMrLh6s8UAC
 EgyHEEAwcgvILUwMR7gTCJnfO6p7eibh2P+6fn+//5f5fJLu6q569erVq1fvvXpVPS716bTs1EmZE9O66v5bv6ioqJ5Wq4WuPfga
 1S2Gr+JnibZGR0f1iLZ2t3a3REXHdI+O1lms/zWMNL+cbFdqFqCSOnnstOz0tMnjr5IPso0bdw04oh3q9f+R3zh//3cZ2SVxyMgh
 roystN+2DqBHj5iYq/d/dE/u/249u/XoFtMD+r9Ht2irzhL126JR9+9/ef/rQm+rrzPodMmpYyyDhliGW8QPn+kawF83+OsLf5ie

@@ -99,6 +99,7 @@ main()
 - Copies extracted `.app` bundle to `Payload/` directory
 - Removes `PlugIns/` (App Extensions - widgets, share extensions, etc.)
 - Removes `Watch/` (Apple Watch companion app)
+- Removes `Extensions/` (Additional app extensions)
 
 **Why remove these:**
 - Simplifies code signing (extensions need separate entitlements)
@@ -320,7 +321,7 @@ Method original = class_getInstanceMethod([NSURLSession class], @selector(dataTa
 ### Similarities
 - Info.plist handling logic (copy/merge strategy)
 - Code injection via dynamic framework
-- Removal of PlugIns and Watch
+- Removal of PlugIns, Watch, and Extensions
 
 ### Differences
 - **MonkeyDev:** Full-featured template with extensive tweaks

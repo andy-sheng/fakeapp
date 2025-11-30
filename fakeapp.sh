@@ -105,6 +105,11 @@ copy_app_to_payload () {
 	local payload_dir="$working_tmp/$appname/Payload";
 	mkdir -p "$payload_dir";
 
+	# Remove placeholder files from template
+	echo "> Removing placeholder files from Payload";
+	find "$payload_dir" -type f -name "*.app" -size 0 -delete 2>/dev/null || true;
+	find "$payload_dir" -type f -name ".DS_Store" -delete 2>/dev/null || true;
+
 	# Copy the extracted .app bundle
 	cp -r "$EXTRACTED_APP_PATH" "$payload_dir/";
 	echo ".app bundle copied to $payload_dir/$(basename $EXTRACTED_APP_PATH)";
@@ -120,6 +125,11 @@ copy_app_to_payload () {
 	if [ -d "$target_app_path/Watch" ]; then
 		echo "> Removing Watch directory";
 		rm -rf "$target_app_path/Watch" || true;
+	fi
+
+	if [ -d "$target_app_path/Extensions" ]; then
+		echo "> Removing Extensions directory";
+		rm -rf "$target_app_path/Extensions" || true;
 	fi
 
 	return 0;
