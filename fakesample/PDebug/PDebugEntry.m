@@ -11,6 +11,7 @@
 #import <dlfcn.h>
 #import "fishhook.h"
 #import "BundleIDHook.h"
+#import "FakeAppConfig.h"
 
 static void * (*orig_dlsym)(void *, const char *);
 
@@ -36,8 +37,8 @@ void * my_dlsym(void * __handle, const char * __symbol)
     orig_dlsym = dlsym(RTLD_DEFAULT, "dlsym");
     rebind_symbols((struct rebinding[1]){{"dlsym", my_dlsym}}, 1);
 
-    // Set original Bundle ID (TODO: read from config file)
-    NSString *originalBundleID = @"com.ss.iphone.ugc.Aweme";  // Example: TikTok
+    // Set original Bundle ID captured from the IPA at project generation time.
+    NSString *originalBundleID = FAKEAPP_ORIGINAL_BUNDLE_ID;
     [BundleIDHook setOriginalBundleID:originalBundleID];
 
     // Install Bundle ID hooks (ObjC + C functions)

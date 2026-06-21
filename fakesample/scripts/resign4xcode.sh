@@ -6,7 +6,7 @@
 APP_DIR="$BUILT_PRODUCTS_DIR/$PRODUCT_NAME.app"
 FRAMEWORKS_DIR="$APP_DIR/Frameworks"
 
-echo  "-------------------------andysheng------"
+echo  "------------------------- resign -------"
 # env
 echo  "$EXPANDED_CODE_SIGN_IDENTITY"
 
