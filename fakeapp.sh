@@ -30,6 +30,8 @@ OPTIONS:
                                 Default: ${bundle_id_prefix}.<appname>
   -c, --certificate IDENTITY    Xcode code signing identity for device builds
                                 (e.g. "Apple Development: Name (TEAMID)").
+  -o, --output DIR              Output directory for the generated project.
+                                Default: current directory. Created if missing.
   -h, --help                    Show this help and exit.
 
 EXAMPLES:
@@ -39,6 +41,9 @@ EXAMPLES:
   # Custom Bundle ID + signing certificate
   fakeapp --bundle-id com.example.fake.myapp \\
           --certificate "Apple Development: Name (TEAMID)" app.ipa
+
+  # Output the generated project into a specific folder
+  fakeapp --output ~/Projects/fakeapps app.ipa
 
 ENVIRONMENT:
   FAKEAPP_BUNDLE_ID_PREFIX      Default Bundle ID prefix
@@ -59,6 +64,7 @@ parse_args () {
 	ipa_path="";
 	requested_bundle_id="";
 	signing_certificate="";
+	output_dir=".";
 
 	while [ "$#" -gt 0 ]; do
 		case "$1" in
@@ -79,6 +85,15 @@ parse_args () {
 					exit 1;
 				}
 				signing_certificate="$1";
+				;;
+			-o|--output|--output-dir)
+				shift;
+				[ "$#" -gt 0 ] || {
+					echo "ERROR: --output requires a value";
+					usage;
+					exit 1;
+				}
+				output_dir="$1";
 				;;
 			-h|--help|help)
 				show_help;
@@ -118,6 +133,7 @@ parse_args () {
 	export ipa_path;
 	export requested_bundle_id;
 	export signing_certificate;
+	export output_dir;
 }
 
 parse_args "$@";
@@ -236,16 +252,17 @@ extract_ipa () {
 	echo "Fake Bundle ID for signing: $fake_bundle_id";
 	[ -n "$signing_certificate" ] && echo "Signing certificate: $signing_certificate";
 
-	# Check if appname directory already exists
-	[ -d "$appname" ] && {
-		echo "WARNING: $appname exists, do you want to continue?"
+	# Check if the target project directory already exists
+	local target_project_dir="$output_dir/$appname";
+	[ -d "$target_project_dir" ] && {
+		echo "WARNING: $target_project_dir exists, do you want to continue?"
 		read -p "(Y)es or (N)o: " confirm_option;
 		[ "$confirm_option" != "Y" ] && {
 			echo  "Cancelled."
 			exit 1;
 		}
 
-		rm -rf "$appname";
+		rm -rf "$target_project_dir";
 	}
 
 	# Store app bundle path and appname for later use
@@ -429,8 +446,12 @@ update_info_plist () {
 }
 
 migrate_target () {
-	echo "> Moving target"
-	mv "$working_tmp/$appname" ./;
+	echo "> Moving target to: $output_dir";
+	mkdir -p "$output_dir" || {
+		echo "ERROR: Cannot create output directory: $output_dir";
+		exit 1;
+	}
+	mv "$working_tmp/$appname" "$output_dir/";
 }
 
 main () {
@@ -451,4 +472,5 @@ main () {
 	echo "Fake app [$appname] created with IPA integration."
 	echo "Original IPA: $(basename $ipa_path)"
 	echo ".app bundle: $(basename $EXTRACTED_APP_PATH)"
+	echo "Project path: $output_dir/$appname"
 }
