@@ -176,7 +176,38 @@ This script:
 - Copies from `Payload/` to build location
 - Removes embedded.mobileprovision
 - Makes executable executable
-- Runs resign script for frameworks/dylibs
+- Branches on `$PLATFORM_NAME`:
+  - **iphoneos** → runs `resign4xcode.sh` (re-sign frameworks with Xcode identity)
+  - **iphonesimulator** → runs `patch_sim.sh` (Mach-O platform rewrite + ad-hoc sign)
+
+### Simulator support (`patch_sim.sh` + `scripts/arm64-to-sim`)
+
+Lets a decrypted **device** app run on the **Apple Silicon** iOS Simulator with no
+certificate/device. Based on [arm64-to-sim](https://github.com/bogo/arm64-to-sim).
+
+How it works:
+- On Apple Silicon, device and simulator both execute arm64. The only thing dyld rejects
+  is the Mach-O platform tag. `patch_sim.sh` rewrites the main executable **and every
+  bundled framework/dylib** from iOS (`LC_BUILD_VERSION.platform = 2`) to simulator
+  (`= 7`). Older binaries that still use `LC_VERSION_MIN_IPHONEOS` are converted to
+  `LC_BUILD_VERSION` by the bundled `arm64-to-sim` tool (dynamic mode).
+- Then ad-hoc signs (`codesign -f -s -`) the bundled frameworks; Xcode's final
+  CodeSign seals the bundle. No dev cert needed.
+- PDebug is built by Xcode as a simulator framework and injected as usual. LookinServer
+  is **not** linked or injected for simulator (it ships device-only slices); its
+  "Inject" script early-exits when `$PLATFORM_NAME = iphonesimulator`.
+
+Gotchas (encoded in the scripts, keep them):
+- Detect load commands with bash substring match `[[ "$info" == *LC_BUILD_VERSION* ]]`,
+  **not** `echo "$info" | grep -q`. Under `set -o pipefail`, large `otool` output
+  (>16 KB pipe buffer, e.g. a big main executable) makes `grep -q` exit early →
+  `echo` gets SIGPIPE → the whole app binary is silently skipped.
+- **Launch by the project Bundle ID** (e.g. `cn.andysheng.fakeapp.<app>`), not the
+  app's original ID — the on-disk `CFBundleIdentifier` is the template's, restored at
+  runtime by `BundleIDHook`. Launching the original ID fails with
+  `FBSApplicationLibrary returned nil`.
+- Apple Silicon only. Hardware/private-capability features (camera, RTC, push,
+  Keychain, IAP) may fail at runtime; launch + UI + local logic work.
 
 ## Technical Details
 

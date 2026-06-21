@@ -72,7 +72,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA58116B1CF846B10050AC09 /* PDebug.framework in Frameworks */,
-				E16D62F02ED351FA008B628A /* LookinServer.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -310,7 +309,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "$SRCROOT/Scripts/optool install -t $CODESIGNING_FOLDER_PATH/$EXECUTABLE_NAME -p \"@executable_path/Frameworks/LookinServer.framework/LookinServer\"\n";
+			shellScript = "# LookinServer 仅有真机平台二进制，模拟器下跳过注入(避免 dyld 平台不匹配加载失败)\nif [ \"$PLATFORM_NAME\" = \"iphonesimulator\" ]; then echo '[fakeapp] simulator: skip LookinServer inject'; exit 0; fi\n$SRCROOT/Scripts/optool install -t $CODESIGNING_FOLDER_PATH/$EXECUTABLE_NAME -p \"@executable_path/Frameworks/LookinServer.framework/LookinServer\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
