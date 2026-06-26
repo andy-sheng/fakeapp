@@ -136,4 +136,6 @@ fi
 
 echo;
 echo "Done. fakeapp $version released.";
-[ "$do_push" -ne 1 ] && echo "Remember: you used --no-push; nothing was pushed.";
+if [ "$do_push" -ne 1 ]; then
+	echo "Remember: you used --no-push; nothing was pushed.";
+fi
