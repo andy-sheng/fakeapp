@@ -24,6 +24,9 @@ fakeapp/
 │   ├── PDebug/              # Code injection framework
 │   ├── fakesample.xcodeproj # Xcode project template
 │   └── scripts/             # Build phase scripts (resign, etc.)
+├── Formula/fakeapp.rb       # Homebrew formula (builds bin/fakeapp from source)
+├── scripts/brew-release.sh  # Tag a release + refresh the formula's url/sha256
+├── VERSION                  # Current release version
 └── README.md                # User documentation
 ```
 
@@ -388,6 +391,28 @@ Method original = class_getInstanceMethod([NSURLSession class], @selector(dataTa
    ```
 
 **Important:** After rebuilding, the template is embedded, so changes to `fakesample/` won't affect existing generated projects.
+
+### Releasing via Homebrew
+
+The tool is distributed as a Homebrew formula (`Formula/fakeapp.rb`). The formula
+runs `build.sh` at install time, so the embedded template always matches the
+released source revision — there is no need to commit a prebuilt binary for the
+formula's sake.
+
+Cut a release with the helper:
+
+```bash
+scripts/brew-release.sh 1.0.1            # bump VERSION, tag v1.0.1, push,
+                                          # recompute sha256, rewrite the formula
+scripts/brew-release.sh 1.0.1 --no-push  # prepare locally without pushing
+scripts/brew-release.sh 1.0.1 --tap-dir ../homebrew-fakeapp   # also update the tap
+```
+
+Install paths:
+- Tap: `brew install andy-sheng/fakeapp/fakeapp` (needs a `homebrew-fakeapp` tap repo).
+- HEAD (no release): `brew install --HEAD <raw URL to Formula/fakeapp.rb>`.
+
+See the **Releasing** section of `README.md` for the full tap-publishing steps.
 
 ## Troubleshooting Guide
 

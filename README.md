@@ -17,6 +17,45 @@ A tool for creating iOS debugging projects from decrypted IPA files. Debug and p
 - Decrypted IPA file
 - Valid code signing certificate
 
+## Install
+
+### Homebrew (recommended)
+
+Once a tap is published (see [Releasing](#releasing)):
+
+```sh
+brew install andy-sheng/fakeapp/fakeapp
+# or, equivalently:
+brew tap andy-sheng/fakeapp
+brew install fakeapp
+```
+
+Try the latest commit without a release (no tap repo required):
+
+```sh
+brew install --HEAD https://raw.githubusercontent.com/andy-sheng/fakeapp/master/Formula/fakeapp.rb
+```
+
+Homebrew rebuilds `bin/fakeapp` from source during install, so the embedded
+template always matches the version you install. After installing, the `fakeapp`
+command is on your `PATH`:
+
+```sh
+fakeapp ~/Downloads/MyApp.ipa
+```
+
+> macOS only — the tool relies on `PlistBuddy`, `codesign`, and `xcodebuild`.
+> Run `xcode-select --install` if the command line tools are missing.
+
+### From source (no Homebrew)
+
+Clone the repo and run the bundled executable directly:
+
+```sh
+git clone https://github.com/andy-sheng/fakeapp.git
+fakeapp/bin/fakeapp ~/Downloads/MyApp.ipa
+```
+
 ## Quick Start
 
 ### 1. Create Project from IPA
@@ -215,6 +254,45 @@ The template directory contains:
 - Default configurations
 
 All of this is packaged into the single `bin/fakeapp` executable, so users only need that one file.
+
+## Releasing
+
+The Homebrew formula lives at [`Formula/fakeapp.rb`](Formula/fakeapp.rb) and builds
+`bin/fakeapp` from source on install. Cutting a release is one command:
+
+```sh
+scripts/brew-release.sh 1.0.0   # first release; matches the committed VERSION
+```
+
+This bumps `VERSION`, creates and pushes the `v1.0.0` git tag, downloads the
+GitHub source tarball for that tag, computes its `sha256`, rewrites `url`/`sha256`
+in the formula, and commits the change. Use `--no-push` to stage everything
+locally first, or `-y` to skip the confirmation prompt.
+
+### Publishing the Homebrew tap
+
+`brew install andy-sheng/fakeapp/fakeapp` resolves to a tap repo named
+`homebrew-fakeapp`. Create it once:
+
+```sh
+# In a sibling directory
+mkdir -p homebrew-fakeapp/Formula
+cp fakeapp/Formula/fakeapp.rb homebrew-fakeapp/Formula/
+cd homebrew-fakeapp
+git init && git add . && git commit -m "fakeapp formula"
+# create the GitHub repo `andy-sheng/homebrew-fakeapp`, then:
+git remote add origin git@github.com:andy-sheng/homebrew-fakeapp.git
+git push -u origin main
+```
+
+After that, point the release script at your tap checkout so each release also
+updates the published formula:
+
+```sh
+scripts/brew-release.sh 1.0.1 --tap-dir ../homebrew-fakeapp   # subsequent releases
+```
+
+Users then upgrade with `brew update && brew upgrade fakeapp`.
 
 ## Credits
 
