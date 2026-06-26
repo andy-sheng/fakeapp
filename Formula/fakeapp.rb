@@ -5,7 +5,7 @@ class Fakeapp < Formula
   # tagged release exists you can still install the tip of the default branch
   # with `brew install --HEAD`.
   url "https://github.com/andy-sheng/fakeapp/archive/refs/tags/v1.0.0.tar.gz"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  sha256 "772b6aca52ef3a2caf85e1c3b3913ee1b2b66b970e7235333bd6cfc4781671d2"
   license "MIT"
   head "https://github.com/andy-sheng/fakeapp.git", branch: "master"
 
