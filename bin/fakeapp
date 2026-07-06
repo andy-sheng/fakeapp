@@ -23,7 +23,13 @@ fakeapp - Create a debuggable Xcode project from a decrypted iOS IPA.
 
 USAGE:
   fakeapp [OPTIONS] IPA_FILE
+  fakeapp skill [--client CLIENT] [--dest DIR] [--print] [--uninstall]
   fakeapp help | --help | -h
+
+COMMANDS:
+  skill                         Install the fakeapp agent skill into your AI
+                                clients (Claude Code, Codex, Cursor, ...).
+                                Run 'fakeapp skill --help' for details.
 
 OPTIONS:
   -b, --bundle-id BUNDLE_ID     Bundle ID for signing the generated app.
@@ -136,18 +142,252 @@ parse_args () {
 	export output_dir;
 }
 
-parse_args "$@";
+# --- install-skill: agent client registry ---------------------------------
+# Known agent clients that consume Agent Skills (a <skills>/<name>/SKILL.md
+# layout). To support another client, extend all three case statements below.
+skill_known_clients () {
+	echo "claude codex cursor agents";
+}
 
-[ -z "$ipa_path" ] && {
-	echo "ERROR: IPA file path required!";
-	usage;
-	exit 1;
-};
+skill_client_name () {
+	case "$1" in
+		claude) echo "Claude Code" ;;
+		codex)  echo "Codex CLI" ;;
+		cursor) echo "Cursor" ;;
+		agents) echo "Agent Skills" ;;
+		*)      echo "$1" ;;
+	esac
+}
 
-[ ! -f "$ipa_path" ] && {
-	echo "ERROR: IPA file not found: $ipa_path";
-	exit 1;
-};
+# Root config dir; its existence means the client is installed for this user.
+skill_client_root () {
+	case "$1" in
+		claude) echo "$HOME/.claude" ;;
+		codex)  echo "$HOME/.codex" ;;
+		cursor) echo "$HOME/.cursor" ;;
+		agents) echo "$HOME/.agents" ;;
+		*)      return 1 ;;
+	esac
+}
+
+# Directory the skill folder is installed into.
+skill_client_dir () {
+	case "$1" in
+		claude) echo "$HOME/.claude/skills" ;;
+		codex)  echo "$HOME/.codex/skills" ;;
+		cursor) echo "$HOME/.cursor/skills" ;;
+		agents) echo "$HOME/.agents/skills" ;;
+		*)      return 1 ;;
+	esac
+}
+
+skill_is_known_client () {
+	local c;
+	for c in $(skill_known_clients); do
+		[ "$c" = "$1" ] && return 0;
+	done
+	return 1;
+}
+
+show_install_skill_help () {
+	cat <<EOF
+fakeapp skill - Install the fakeapp agent skill into your AI clients.
+
+USAGE:
+  fakeapp skill [OPTIONS]
+
+OPTIONS:
+  --client CLIENT   Target client(s): claude, codex, cursor, agents, or all.
+                    Repeatable and/or comma-separated. When omitted, installs
+                    into every supported client detected on this machine
+                    (falling back to Claude Code if none are detected).
+  --dest DIR        Install into a custom skills directory (overrides --client).
+  --print           Print the bundled SKILL.md to stdout and exit.
+  --uninstall       Remove the installed fakeapp skill instead of installing.
+  --force           Overwrite an existing installed skill.
+  -h, --help        Show this help and exit.
+
+SUPPORTED CLIENTS:
+  claude   Claude Code    -> ~/.claude/skills/fakeapp
+  codex    Codex CLI      -> ~/.codex/skills/fakeapp
+  cursor   Cursor         -> ~/.cursor/skills/fakeapp
+  agents   Agent Skills   -> ~/.agents/skills/fakeapp
+
+EXAMPLES:
+  fakeapp skill                        # auto-detect installed clients
+  fakeapp skill --client claude        # a single client
+  fakeapp skill --client claude,codex  # several clients
+  fakeapp skill --client all --force   # (re)install everywhere
+  fakeapp skill --dest ~/.config/skills
+  fakeapp skill --print                # inspect the skill content
+  fakeapp skill --uninstall            # remove from detected clients
+EOF
+}
+
+parse_install_skill_args () {
+	skill_clients="";
+	skill_dest="";
+	skill_print=0;
+	skill_uninstall=0;
+	skill_force=0;
+
+	while [ "$#" -gt 0 ]; do
+		case "$1" in
+			--client)
+				shift;
+				[ "$#" -gt 0 ] || { echo "ERROR: --client requires a value"; exit 1; }
+				skill_clients="$skill_clients ${1//,/ }";
+				;;
+			--dest|--destination)
+				shift;
+				[ "$#" -gt 0 ] || { echo "ERROR: --dest requires a value"; exit 1; }
+				skill_dest="$1";
+				;;
+			--print)     skill_print=1 ;;
+			--uninstall) skill_uninstall=1 ;;
+			--force)     skill_force=1 ;;
+			-h|--help)   show_install_skill_help; exit 0 ;;
+			-*)          echo "ERROR: Unknown option: $1"; show_install_skill_help; exit 1 ;;
+			*)           echo "ERROR: Unexpected argument: $1"; show_install_skill_help; exit 1 ;;
+		esac
+		shift;
+	done
+
+	# Normalize/validate requested clients ("all" expands to every known one).
+	local normalized="" c;
+	for c in $skill_clients; do
+		if [ "$c" = "all" ]; then
+			normalized="$(skill_known_clients)";
+			break;
+		fi
+		skill_is_known_client "$c" || {
+			echo "ERROR: Unknown client: $c (known: $(skill_known_clients) all)";
+			exit 1;
+		};
+		normalized="$normalized $c";
+	done
+	skill_clients="$normalized";
+
+	[ "$skill_print" -eq 1 ] && [ "$skill_uninstall" -eq 1 ] && {
+		echo "ERROR: --print cannot be combined with --uninstall"; exit 1;
+	};
+
+	export skill_clients skill_dest skill_print skill_uninstall skill_force;
+}
+
+prepare_skill_source () {
+	# Materialize the bundled skill tree into $working_tmp/skills/fakeapp.
+	mkdir -p "$working_tmp/skills";
+	if [ -n "${fakeapp_skill_package:-}" ]; then
+		local skill_tgz="$working_tmp/fakeapp_skill.tgz";
+		base64 -D -o "$skill_tgz" <<< "$fakeapp_skill_package";
+		tar xzf "$skill_tgz" -C "$working_tmp/skills";
+	elif [ -d "$(dirname "$0")/skills/fakeapp" ]; then
+		# Dev fallback: running the source script beside a skills/ directory.
+		cp -r "$(dirname "$0")/skills/." "$working_tmp/skills/";
+	else
+		echo "ERROR: bundled fakeapp skill not found."; exit 1;
+	fi
+	[ -f "$working_tmp/skills/fakeapp/SKILL.md" ] || {
+		echo "ERROR: bundled skill is missing SKILL.md"; exit 1;
+	};
+}
+
+run_install_skill () {
+	prepare_skill_source;
+	local skill_src="$working_tmp/skills/fakeapp";
+
+	if [ "${skill_print:-0}" -eq 1 ]; then
+		cat "$skill_src/SKILL.md";
+		return 0;
+	fi
+
+	# Resolve targets as newline-separated "Display Name|/path/to/skills".
+	local targets="" c;
+	if [ -n "${skill_dest:-}" ]; then
+		local dest_expanded;
+		case "$skill_dest" in
+			"~")   dest_expanded="$HOME" ;;
+			"~/"*) dest_expanded="$HOME/${skill_dest#\~/}" ;;
+			*)     dest_expanded="$skill_dest" ;;
+		esac
+		[ "$dest_expanded" = "/" ] && {
+			echo "ERROR: refusing to use / as skills destination"; exit 1;
+		};
+		targets="Custom|$dest_expanded";
+	elif [ -n "${skill_clients// /}" ]; then
+		for c in $skill_clients; do
+			targets="$targets
+$(skill_client_name "$c")|$(skill_client_dir "$c")";
+		done
+	else
+		# auto: install into every detected client, else default to Claude Code.
+		local detected="";
+		for c in $(skill_known_clients); do
+			[ -d "$(skill_client_root "$c")" ] && detected="$detected $c";
+		done
+		if [ -z "${detected// /}" ]; then
+			if [ "${skill_uninstall:-0}" -eq 1 ]; then
+				echo "No supported AI clients detected; nothing to uninstall.";
+				return 0;
+			fi
+			echo "> No supported AI clients detected; defaulting to Claude Code.";
+			detected="claude";
+		fi
+		for c in $detected; do
+			targets="$targets
+$(skill_client_name "$c")|$(skill_client_dir "$c")";
+		done
+	fi
+
+	local any=0 name dir dest;
+	while IFS='|' read -r name dir; do
+		[ -n "$name" ] || continue;
+		dest="$dir/fakeapp";
+		if [ "${skill_uninstall:-0}" -eq 1 ]; then
+			if [ -d "$dest" ]; then
+				rm -rf "$dest";
+				echo "Removed fakeapp skill  -> $name: $dest";
+				any=1;
+			fi
+			continue;
+		fi
+		if [ -d "$dest" ] && [ "${skill_force:-0}" -ne 1 ]; then
+			echo "ERROR: skill already installed at $dest";
+			echo "       re-run with --force to overwrite.";
+			exit 1;
+		fi
+		mkdir -p "$dir";
+		rm -rf "$dest";
+		cp -r "$skill_src" "$dest";
+		echo "Installed fakeapp skill -> $name: $dest";
+		any=1;
+	done <<< "$targets";
+
+	if [ "$any" -eq 0 ]; then
+		if [ "${skill_uninstall:-0}" -eq 1 ]; then
+			echo "No installed fakeapp skill found.";
+		else
+			echo "ERROR: no install targets resolved."; exit 1;
+		fi
+	fi
+	return 0;
+}
+
+# --- top-level dispatch -----------------------------------------------------
+subcommand="ipa";
+case "${1:-}" in
+	skill|install-skill)
+		# `install-skill` kept as a hidden backward-compatible alias for `skill`.
+		subcommand="install-skill";
+		shift;
+		parse_install_skill_args "$@";
+		;;
+	*)
+		parse_args "$@";
+		;;
+esac
+export subcommand;
 
 plist_get () {
 	/usr/libexec/PlistBuddy -c "Print $1" "$2" 2>/dev/null || true;
@@ -455,6 +695,24 @@ migrate_target () {
 }
 
 main () {
+	case "${subcommand:-ipa}" in
+		install-skill)
+			run_install_skill;
+			return 0;
+			;;
+	esac
+
+	[ -z "$ipa_path" ] && {
+		echo "ERROR: IPA file path required!";
+		usage;
+		exit 1;
+	};
+
+	[ ! -f "$ipa_path" ] && {
+		echo "ERROR: IPA file not found: $ipa_path";
+		exit 1;
+	};
+
 	extract_ipa;
 
 	prepare_packed_files;
@@ -474,7 +732,7 @@ main () {
 	echo ".app bundle: $(basename $EXTRACTED_APP_PATH)"
 	echo "Project path: $output_dir/$appname"
 }
-fakesample_package="H4sIADWsN2oAA+y9CXwURfY4PkcC4YgTISNBQUcEBLkSyAARowxkcAITQIEVFYQAgaBAYjLhWEWBZFzadlZ2FWVV1qwrLh6scRUI
+fakesample_package="H4sIAFXAS2oAA+y9CXwURfY4PkcC4YgTISNBQUcEBLkSyAARowxkcAITQIEVFYQAgaBAYjLhWEWBZFzadlZ2FWVV1qwrLh6scRUI
 SDAcQjiNEA4BuY+J4Qh3AiHze0d1T88kHPtf1+/v9/8yn0/SXd1Vr169evXqvVevqscmv5CSmTwxfUJKJ91/6xcdHd3NarXQtStf
 ozvH8lX8LDHWmJjorjHWLtYuluiY2C4xMTqL9b+GkeaXlelKzgBUkieNmZaZmjJp3HXyQbaxY28AR7RDvf4/8hvr7/+OIzomDBox
 yJWWkfLr1gH06Bobe/3+j+nG/d8lOtbapXNX6P+unaO76SzRvy4atf/+l/e/LvSuujqDTpeUPNoyYJBlqEX88JmuHvx1hr8+8Ifp
@@ -9565,5 +9823,36 @@ QkKO+nbJ33nwGyvBUJeCNlRUrLcPvgi2LdMyLdMyLdNXONGe49vefZrLtEzLtExgHxj6+Zx+/pB8PqDv
 Q/L5gMJ9QD+/RT+/TT+/Qz8Z+vmcfv6QfFKj9YAGHw9oyWbw8oAOETxg6Ofzhaq8TMv0jUl/i3x8B/p/bnr8v0zLtExf4/TgW0Wh
 mF+ZPpQEfS2D/n7DzLBCe/MVvxPwARks/Acr9nuGfj6nnz8kn0tHYJmWaZmW6b5TwPwfHOyH/u6ujHnz/zBfZq7/TGfw/F9ief/P
 Mi3TMi3T+03/H826JrYASiUA
+"
+fakeapp_skill_package="H4sIAFXAS2oAA+1aS2/jyBH2LhAEYc7JueA5rCRLlPWyPPLuIH7NjrKasWNrdmdPwxbZknpMkdwmaVkbLJBTfkCQQ+75G7nsfwiQ
+a7C/JF81qYc9rwxgT5C1CtCQIrurquv76mF77Jf2xl3L9vZ2u9Uic93Jrtv1ZnbN7htUa9Xr9XajWW/XaLtWb223Nmj7zj2DpHEi
+NFwRgTeLxzIYvWUdlg2H79CTHYUW1/8X+cVvf7nx6cbGU+HSyTm9oFz42cav8Knj8x0+/P3v/53K/X7/LL/lHX/D59c3lnyyfP4b
+N5zYIop8aUc6vJSBCFy58cmnGz9u/evf//jhnz/ewiHX8jY5FVdPpPCkrrqp1jJIPKVv28Z787+2fSP/d+qt9gZd3bYjb5J7nv+N
+bZokaiK/qLV3G41mu7HbstsPd3darWZj12q1qdc92D87fNL9+ti+Ekmi7Tel6xf7f+juT88vXzR7Vw9rT4+t5kM6x6bet+/atJLj
+1v86DvdV7Ord23hf/nO+3Oj/jWZjg1p379q9z3+7ar8ciguJ5LwzGx8+/zVrteZ6/vsosp7/7rXY1eUEeFd14MPnv9ZOs76e/z6G
+vGn+291uYwLfra/nv5+/2POsv8M58MPnv0a7VV/Pfx9DlvjbL8+/6vZ69sS7bRuIx06z+SHzX6uxs7Oe/z6KrOe/ey3L/F/Ogbdd
+B96b/6/Nf23z8996/rt7efP8t7PTqrWbzfX897OXZf7fVfd/b/7v1Ju1m/2/1lr//e+jSKVSsQIxkR3KeWB5Mna1ihIVBh16VLGI
++qkOSJAnXT2LEumRwqTQPd0nFSSheTFIRyMx8CW9cENPEnL8lXQTmqpkTMlYkpMrd6DtsNe16XksaYpom7dpLDVNRZDEBH1GW5l1
+DJUvyzASR1BWplCTlpdSx7ICmFQgpYY6ARVKe5VI6GRmPIOdPewyHriAN5yQ8epSCXZ2huMql4Yap56G+oIKW34ovOIelOn0+kE9
+ealcyRopzHzd5yJG58pXLp6wuXM1SX2RwDs+bpgmJKDJlTpRQ+WKRO6x57EL+oS+RyK4EaShhoN46tgqEg7xoW2LYbEeLDCxFgGk
+Qap8L35X1DOFVCotzlEqzSGz6SSSgcUnGclAasGnnG9Uc9eQCzQLUyyBttT3qdc7OsgNqgDgdIM40elEAjIrA8o8ZrVfKzmlI7NU
+6rJRJcgxIXYMDpUMGtCLohAMop/+9FcaIkQimHGky1YQ0iuh/IGW4gKQf5cqLT0b8XhA3xjOhEwZxj2m+EL5vmVVaNPYpOqcL7jL
+2ZItzJmxSSOF/rMMuM17z9IgW/U64PEc3k0qXAO/TPCTYS4aFd2ccBw/kxdGn7FYpc1xGF4gDhMJhnjmiR+OSIHxgUwMCxMNgih3
+0yh7CrTfwhSjlpHctKyTwJ/dwBlvYspoLe2RTV46iQCxyURnqJUnKiqMK/zYKdpMZzrH4aQ1UIHQSsJlLUkG8wxg/KYIMQ6bcHpk
+MJxloGQEgMMT4SK8xojIGFMqGd+ZeeCKwJMCMIvJOfVVnByknjdzyuTwmliNAr6/4i+G3o4JaX+1cCCwkwk7A1ic0/3+E4cKDhgy
+XejnAl4xFXzR0uabjbr9lbxeQv8YxOMIMuxwNsuuDsc+A/sIHPLDiE9K7Ch4vprbtGUykXcvtS0os6Lwet3AT1t7c/rMNaGeeXOa
+HwIRg+LQD6eWVbOh9cs8Xw0rc0p0SiXUGnIcJx7zTX5gqkYiGVeTsAqzfFR+94BCU9TjTvaNqDIoU6UySAPPR1Z6dPD82VHv+GX3
+CO/mZz0wbwnPCp4citRPOgyFLa/EhMe53KL9Of7hPvKouNDusvbVE3aPjp/1u/1viQw1N1+LcIeeQQUV+sf7T7tHxc2FqpBVobRG
+qK5H3TNakfypBzq6CPls1c/sfzTwu2IeJr70OYMQQC91mZCfww02+6i6uLMNFTnGDmC5Ssi0OedUzLiMVZmM0YzCIUPBGrlqUeSn
+sVllCpFDyzK3bDUYNVBTgXGdEeVSvCi6pVKZYtRbRrcvxYSJPgjz/smYZntNQpqWmtth+/mrQl698hYRojoU4ZdyLwxJ4wQpzg5l
+VTnSMo7pcOJtncGhBjvEZRBmlx3tesUrgm7w0edahARRp+MwkCurWWuuz4RZMs/HlRPiQpgmIXp04o6RfqY6rpRWxE4kaAGTrF14
+lXHoGgZiLXeHIGSFK1RiZ3siDdwxDWZG1+nZye+PD/tLvsJVUwEN8G9j7COnWDaVLQ/yZ4iaVuhxwocKM3L4mZkhGlJsKpxR+Pjg
+nEPDziCgPTXQAtTTMsGoBKcD5TtZJmdtwVQNgGxZx55KVjmXoZhfjoNEz+yJY1MXnWHeNFF1YxrIIdeEhZ+WMxEqKBSdDoYDxwkH
+r1xriwqXofKKvI3+yH7Ss/NeOCr8Lu9O8CzXk23eNEMPUbWadyaKp+r777NmPm9MaFRZ0x/IsbhUCEkyRWOOyyQT17Z+YPPmqF+G
+QFeYflAqHS1qrelIzEUgwmAue8ui+fCRYnK1iMfMvyzkXE+PrxIZxFy0TFvC0KEibmcFtJF0hCmkyo3jG6aVuVuurzpFphkoBpSG
+s3k9m/eVMKh4Kr4g5/Bxxpiuh0oBdkntwIyYxSbUiZwwNeVn8Z75vkIOkJoHRmQVDgDSmu7IP0kzIwXlVRXruPWz2SdCe1Ocohpp
+dQmdFVdEYoDMwtg6lALMQTUquGCFFsjaNB6X6Ss5Q0gVMra7f1oEajNDRLgP29dSaC+PWpmed7P89kMXjgI9DLsMJPvQzXslknkI
+8uYTetbscihMafvpz38hGA5GGeOWTSCbI1aahjMfCIYStdaVjP5jHgDG0o86i/6N8s0PHLw9zVsXjZMkijvV6gg60wH/iqD6eg9f
+/2JgLWtZy1ruRv4D2FD5BgAwAAA=
 "
 main;

@@ -26,9 +26,30 @@ fakeapp/
 │   └── scripts/             # Build phase scripts (resign, etc.)
 ├── Formula/fakeapp.rb       # Homebrew formula (builds bin/fakeapp from source)
 ├── scripts/brew-release.sh  # Tag a release + refresh the formula's url/sha256
+├── skills/fakeapp/SKILL.md  # Bundled agent skill (embedded into bin/fakeapp)
 ├── VERSION                  # Current release version
 └── README.md                # User documentation
 ```
+
+### Subcommands
+
+Besides the default IPA-to-project flow, `bin/fakeapp` has a `skill` subcommand
+(`install-skill` is kept as a hidden backward-compatible alias) that installs the
+bundled agent skill (`skills/fakeapp/`) into an AI client's skill directory:
+
+```bash
+fakeapp skill                        # auto-detect installed clients; fallback claude
+fakeapp skill --client claude,codex  # explicit client(s), or `all`
+fakeapp skill --dest DIR             # custom skills dir
+fakeapp skill --print | --uninstall | --force
+```
+
+The skill dir is packed by `build.sh` (tar+base64, like `fakesample/`) into the
+`fakeapp_skill_package` variable and unpacked at runtime. Client → target-dir
+mappings live in the `skill_client_*` helpers in `fakeapp.sh`; add a client by
+extending those three `case` statements. Top-level dispatch keys off the first
+arg (`skill`/`install-skill`) and `main()` branches on `$subcommand`, so the
+subcommand never touches the IPA path.
 
 ### Build System Flow
 

@@ -23,7 +23,13 @@ fakeapp - Create a debuggable Xcode project from a decrypted iOS IPA.
 
 USAGE:
   fakeapp [OPTIONS] IPA_FILE
+  fakeapp skill [--client CLIENT] [--dest DIR] [--print] [--uninstall]
   fakeapp help | --help | -h
+
+COMMANDS:
+  skill                         Install the fakeapp agent skill into your AI
+                                clients (Claude Code, Codex, Cursor, ...).
+                                Run 'fakeapp skill --help' for details.
 
 OPTIONS:
   -b, --bundle-id BUNDLE_ID     Bundle ID for signing the generated app.
@@ -136,18 +142,252 @@ parse_args () {
 	export output_dir;
 }
 
-parse_args "$@";
+# --- install-skill: agent client registry ---------------------------------
+# Known agent clients that consume Agent Skills (a <skills>/<name>/SKILL.md
+# layout). To support another client, extend all three case statements below.
+skill_known_clients () {
+	echo "claude codex cursor agents";
+}
 
-[ -z "$ipa_path" ] && {
-	echo "ERROR: IPA file path required!";
-	usage;
-	exit 1;
-};
+skill_client_name () {
+	case "$1" in
+		claude) echo "Claude Code" ;;
+		codex)  echo "Codex CLI" ;;
+		cursor) echo "Cursor" ;;
+		agents) echo "Agent Skills" ;;
+		*)      echo "$1" ;;
+	esac
+}
 
-[ ! -f "$ipa_path" ] && {
-	echo "ERROR: IPA file not found: $ipa_path";
-	exit 1;
-};
+# Root config dir; its existence means the client is installed for this user.
+skill_client_root () {
+	case "$1" in
+		claude) echo "$HOME/.claude" ;;
+		codex)  echo "$HOME/.codex" ;;
+		cursor) echo "$HOME/.cursor" ;;
+		agents) echo "$HOME/.agents" ;;
+		*)      return 1 ;;
+	esac
+}
+
+# Directory the skill folder is installed into.
+skill_client_dir () {
+	case "$1" in
+		claude) echo "$HOME/.claude/skills" ;;
+		codex)  echo "$HOME/.codex/skills" ;;
+		cursor) echo "$HOME/.cursor/skills" ;;
+		agents) echo "$HOME/.agents/skills" ;;
+		*)      return 1 ;;
+	esac
+}
+
+skill_is_known_client () {
+	local c;
+	for c in $(skill_known_clients); do
+		[ "$c" = "$1" ] && return 0;
+	done
+	return 1;
+}
+
+show_install_skill_help () {
+	cat <<EOF
+fakeapp skill - Install the fakeapp agent skill into your AI clients.
+
+USAGE:
+  fakeapp skill [OPTIONS]
+
+OPTIONS:
+  --client CLIENT   Target client(s): claude, codex, cursor, agents, or all.
+                    Repeatable and/or comma-separated. When omitted, installs
+                    into every supported client detected on this machine
+                    (falling back to Claude Code if none are detected).
+  --dest DIR        Install into a custom skills directory (overrides --client).
+  --print           Print the bundled SKILL.md to stdout and exit.
+  --uninstall       Remove the installed fakeapp skill instead of installing.
+  --force           Overwrite an existing installed skill.
+  -h, --help        Show this help and exit.
+
+SUPPORTED CLIENTS:
+  claude   Claude Code    -> ~/.claude/skills/fakeapp
+  codex    Codex CLI      -> ~/.codex/skills/fakeapp
+  cursor   Cursor         -> ~/.cursor/skills/fakeapp
+  agents   Agent Skills   -> ~/.agents/skills/fakeapp
+
+EXAMPLES:
+  fakeapp skill                        # auto-detect installed clients
+  fakeapp skill --client claude        # a single client
+  fakeapp skill --client claude,codex  # several clients
+  fakeapp skill --client all --force   # (re)install everywhere
+  fakeapp skill --dest ~/.config/skills
+  fakeapp skill --print                # inspect the skill content
+  fakeapp skill --uninstall            # remove from detected clients
+EOF
+}
+
+parse_install_skill_args () {
+	skill_clients="";
+	skill_dest="";
+	skill_print=0;
+	skill_uninstall=0;
+	skill_force=0;
+
+	while [ "$#" -gt 0 ]; do
+		case "$1" in
+			--client)
+				shift;
+				[ "$#" -gt 0 ] || { echo "ERROR: --client requires a value"; exit 1; }
+				skill_clients="$skill_clients ${1//,/ }";
+				;;
+			--dest|--destination)
+				shift;
+				[ "$#" -gt 0 ] || { echo "ERROR: --dest requires a value"; exit 1; }
+				skill_dest="$1";
+				;;
+			--print)     skill_print=1 ;;
+			--uninstall) skill_uninstall=1 ;;
+			--force)     skill_force=1 ;;
+			-h|--help)   show_install_skill_help; exit 0 ;;
+			-*)          echo "ERROR: Unknown option: $1"; show_install_skill_help; exit 1 ;;
+			*)           echo "ERROR: Unexpected argument: $1"; show_install_skill_help; exit 1 ;;
+		esac
+		shift;
+	done
+
+	# Normalize/validate requested clients ("all" expands to every known one).
+	local normalized="" c;
+	for c in $skill_clients; do
+		if [ "$c" = "all" ]; then
+			normalized="$(skill_known_clients)";
+			break;
+		fi
+		skill_is_known_client "$c" || {
+			echo "ERROR: Unknown client: $c (known: $(skill_known_clients) all)";
+			exit 1;
+		};
+		normalized="$normalized $c";
+	done
+	skill_clients="$normalized";
+
+	[ "$skill_print" -eq 1 ] && [ "$skill_uninstall" -eq 1 ] && {
+		echo "ERROR: --print cannot be combined with --uninstall"; exit 1;
+	};
+
+	export skill_clients skill_dest skill_print skill_uninstall skill_force;
+}
+
+prepare_skill_source () {
+	# Materialize the bundled skill tree into $working_tmp/skills/fakeapp.
+	mkdir -p "$working_tmp/skills";
+	if [ -n "${fakeapp_skill_package:-}" ]; then
+		local skill_tgz="$working_tmp/fakeapp_skill.tgz";
+		base64 -D -o "$skill_tgz" <<< "$fakeapp_skill_package";
+		tar xzf "$skill_tgz" -C "$working_tmp/skills";
+	elif [ -d "$(dirname "$0")/skills/fakeapp" ]; then
+		# Dev fallback: running the source script beside a skills/ directory.
+		cp -r "$(dirname "$0")/skills/." "$working_tmp/skills/";
+	else
+		echo "ERROR: bundled fakeapp skill not found."; exit 1;
+	fi
+	[ -f "$working_tmp/skills/fakeapp/SKILL.md" ] || {
+		echo "ERROR: bundled skill is missing SKILL.md"; exit 1;
+	};
+}
+
+run_install_skill () {
+	prepare_skill_source;
+	local skill_src="$working_tmp/skills/fakeapp";
+
+	if [ "${skill_print:-0}" -eq 1 ]; then
+		cat "$skill_src/SKILL.md";
+		return 0;
+	fi
+
+	# Resolve targets as newline-separated "Display Name|/path/to/skills".
+	local targets="" c;
+	if [ -n "${skill_dest:-}" ]; then
+		local dest_expanded;
+		case "$skill_dest" in
+			"~")   dest_expanded="$HOME" ;;
+			"~/"*) dest_expanded="$HOME/${skill_dest#\~/}" ;;
+			*)     dest_expanded="$skill_dest" ;;
+		esac
+		[ "$dest_expanded" = "/" ] && {
+			echo "ERROR: refusing to use / as skills destination"; exit 1;
+		};
+		targets="Custom|$dest_expanded";
+	elif [ -n "${skill_clients// /}" ]; then
+		for c in $skill_clients; do
+			targets="$targets
+$(skill_client_name "$c")|$(skill_client_dir "$c")";
+		done
+	else
+		# auto: install into every detected client, else default to Claude Code.
+		local detected="";
+		for c in $(skill_known_clients); do
+			[ -d "$(skill_client_root "$c")" ] && detected="$detected $c";
+		done
+		if [ -z "${detected// /}" ]; then
+			if [ "${skill_uninstall:-0}" -eq 1 ]; then
+				echo "No supported AI clients detected; nothing to uninstall.";
+				return 0;
+			fi
+			echo "> No supported AI clients detected; defaulting to Claude Code.";
+			detected="claude";
+		fi
+		for c in $detected; do
+			targets="$targets
+$(skill_client_name "$c")|$(skill_client_dir "$c")";
+		done
+	fi
+
+	local any=0 name dir dest;
+	while IFS='|' read -r name dir; do
+		[ -n "$name" ] || continue;
+		dest="$dir/fakeapp";
+		if [ "${skill_uninstall:-0}" -eq 1 ]; then
+			if [ -d "$dest" ]; then
+				rm -rf "$dest";
+				echo "Removed fakeapp skill  -> $name: $dest";
+				any=1;
+			fi
+			continue;
+		fi
+		if [ -d "$dest" ] && [ "${skill_force:-0}" -ne 1 ]; then
+			echo "ERROR: skill already installed at $dest";
+			echo "       re-run with --force to overwrite.";
+			exit 1;
+		fi
+		mkdir -p "$dir";
+		rm -rf "$dest";
+		cp -r "$skill_src" "$dest";
+		echo "Installed fakeapp skill -> $name: $dest";
+		any=1;
+	done <<< "$targets";
+
+	if [ "$any" -eq 0 ]; then
+		if [ "${skill_uninstall:-0}" -eq 1 ]; then
+			echo "No installed fakeapp skill found.";
+		else
+			echo "ERROR: no install targets resolved."; exit 1;
+		fi
+	fi
+	return 0;
+}
+
+# --- top-level dispatch -----------------------------------------------------
+subcommand="ipa";
+case "${1:-}" in
+	skill|install-skill)
+		# `install-skill` kept as a hidden backward-compatible alias for `skill`.
+		subcommand="install-skill";
+		shift;
+		parse_install_skill_args "$@";
+		;;
+	*)
+		parse_args "$@";
+		;;
+esac
+export subcommand;
 
 plist_get () {
 	/usr/libexec/PlistBuddy -c "Print $1" "$2" 2>/dev/null || true;
@@ -455,6 +695,24 @@ migrate_target () {
 }
 
 main () {
+	case "${subcommand:-ipa}" in
+		install-skill)
+			run_install_skill;
+			return 0;
+			;;
+	esac
+
+	[ -z "$ipa_path" ] && {
+		echo "ERROR: IPA file path required!";
+		usage;
+		exit 1;
+	};
+
+	[ ! -f "$ipa_path" ] && {
+		echo "ERROR: IPA file not found: $ipa_path";
+		exit 1;
+	};
+
 	extract_ipa;
 
 	prepare_packed_files;

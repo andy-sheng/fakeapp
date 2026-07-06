@@ -56,6 +56,33 @@ git clone https://github.com/andy-sheng/fakeapp.git
 fakeapp/bin/fakeapp ~/Downloads/MyApp.ipa
 ```
 
+### Agent skill
+
+fakeapp ships a bundled [agent skill](skills/fakeapp/SKILL.md) that teaches an AI
+coding client (Claude Code, Codex, Cursor, …) when and how to drive the tool.
+Install it into your client's skill directory:
+
+```sh
+fakeapp skill                        # auto-detect installed clients
+fakeapp skill --client claude        # a single client
+fakeapp skill --client claude,codex  # several clients
+fakeapp skill --client all --force   # (re)install everywhere
+fakeapp skill --dest ~/.config/skills
+fakeapp skill --print                # inspect the skill content
+fakeapp skill --uninstall            # remove it again
+```
+
+With no `--client`, it installs into every supported client detected on this
+machine (falling back to Claude Code if none are found). Supported clients and
+their targets:
+
+| Client | Skill installed to |
+| --- | --- |
+| `claude` (Claude Code) | `~/.claude/skills/fakeapp` |
+| `codex` (Codex CLI) | `~/.codex/skills/fakeapp` |
+| `cursor` (Cursor) | `~/.cursor/skills/fakeapp` |
+| `agents` (Agent Skills) | `~/.agents/skills/fakeapp` |
+
 ## Quick Start
 
 ### 1. Create Project from IPA
@@ -252,6 +279,9 @@ The template directory contains:
 - PDebug framework for code injection
 - Build scripts for code signing
 - Default configurations
+
+The `skills/` directory (the `fakeapp` agent skill) is embedded the same way and
+unpacked by `fakeapp skill`.
 
 All of this is packaged into the single `bin/fakeapp` executable, so users only need that one file.
 
