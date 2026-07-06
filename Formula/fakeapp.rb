@@ -4,8 +4,8 @@ class Fakeapp < Formula
   # `url`/`sha256` are maintained by scripts/brew-release.sh. Until the first
   # tagged release exists you can still install the tip of the default branch
   # with `brew install --HEAD`.
-  url "https://github.com/andy-sheng/fakeapp/archive/refs/tags/v1.0.0.tar.gz"
-  sha256 "772b6aca52ef3a2caf85e1c3b3913ee1b2b66b970e7235333bd6cfc4781671d2"
+  url "https://github.com/andy-sheng/fakeapp/archive/refs/tags/v1.0.1.tar.gz"
+  sha256 "201d6faa7c8923f1009d45fcdbd34d76af75a5768c53586d41b64abefeeab3f8"
   license "MIT"
   head "https://github.com/andy-sheng/fakeapp.git", branch: "master"
 
