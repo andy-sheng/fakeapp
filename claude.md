@@ -218,8 +218,13 @@ How it works:
 - Then ad-hoc signs (`codesign -f -s -`) the bundled frameworks; Xcode's final
   CodeSign seals the bundle. No dev cert needed.
 - PDebug is built by Xcode as a simulator framework and injected as usual. LookinServer
-  is **not** linked or injected for simulator (it ships device-only slices); its
-  "Inject" script early-exits when `$PLATFORM_NAME = iphonesimulator`.
+  now ships as `LookinServer.xcframework` (`fakesample/fakesample/Vendors/`) with an
+  **arm64 iOS-simulator slice** (`ios-arm64_x86_64-simulator`) plus a device slice
+  (`ios-arm64`), so Xcode embeds the platform-correct slice and it is injected on **both**
+  device and simulator — the old `$PLATFORM_NAME = iphonesimulator` skip is gone.
+  Regenerate the xcframework with `scripts/build-lookinserver-xcframework.sh <tag> <out>`
+  (builds LookinServer source for device + simulator with `-configuration Debug` so
+  `SHOULD_COMPILE_LOOKIN_SERVER` is defined, product forced to `type: .dynamic`).
 
 Gotchas (encoded in the scripts, keep them):
 - Detect load commands with bash substring match `[[ "$info" == *LC_BUILD_VERSION* ]]`,

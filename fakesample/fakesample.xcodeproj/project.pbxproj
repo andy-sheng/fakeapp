@@ -61,7 +61,7 @@
 		AA5811731CF846EA0050AC09 /* PDebugEntry.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PDebugEntry.h; sourceTree = "<group>"; };
 		AA5811741CF846EA0050AC09 /* PDebugEntry.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PDebugEntry.m; sourceTree = "<group>"; };
 		AA58117A1CF8486C0050AC09 /* Payload */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Payload; sourceTree = "<group>"; };
-		E16D62EE2ED351FA008B628A /* LookinServer.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = LookinServer.framework; sourceTree = "<group>"; };
+		E16D62EE2ED351FA008B628A /* LookinServer.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = LookinServer.xcframework; sourceTree = "<group>"; };
 		E17D2A862EDC820D0076FEB0 /* BundleIDHook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BundleIDHook.h; sourceTree = "<group>"; };
 		E17D2A872EDC820D0076FEB0 /* BundleIDHook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BundleIDHook.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -291,7 +291,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "$SRCROOT/Scripts/optool install -t $CODESIGNING_FOLDER_PATH/$EXECUTABLE_NAME -p \"@executable_path/Frameworks/PDebug.framework/PDebug\"";
+			shellScript = "$SRCROOT/scripts/optool install -t $CODESIGNING_FOLDER_PATH/$EXECUTABLE_NAME -p \"@executable_path/Frameworks/PDebug.framework/PDebug\"";
 		};
 		E16D62F22ED35217008B628A /* Inject LookinServer.framework Script */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -309,7 +309,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# LookinServer 仅有真机平台二进制，模拟器下跳过注入(避免 dyld 平台不匹配加载失败)\nif [ \"$PLATFORM_NAME\" = \"iphonesimulator\" ]; then echo '[fakeapp] simulator: skip LookinServer inject'; exit 0; fi\n$SRCROOT/Scripts/optool install -t $CODESIGNING_FOLDER_PATH/$EXECUTABLE_NAME -p \"@executable_path/Frameworks/LookinServer.framework/LookinServer\"\n";
+			shellScript = "# LookinServer 由 xcframework 提供各平台 slice(含 arm64 模拟器)，真机/模拟器均注入\n$SRCROOT/scripts/optool install -t $CODESIGNING_FOLDER_PATH/$EXECUTABLE_NAME -p \"@executable_path/Frameworks/LookinServer.framework/LookinServer\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
