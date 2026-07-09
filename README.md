@@ -144,10 +144,13 @@ Instruments, and `atos` all show readable names.
 - Runs **once** at project-generation time, baked into `Payload/<App>.app`. Xcode re-signs
   on build, so the modified binary is fine.
 - **On by default.** Disable with `--no-symbols` or `FAKEAPP_NO_SYMBOLS=1`.
-- Restores **Objective-C** methods (real `-[Class method]` names) **and Swift class methods**
-  (synthetic `Type.method<N>` names from `__swift5` metadata — Swift doesn't store method
-  names, so the type name is real but the method part is kind + vtable index). Only the
-  **main executable** is processed; C/C++ static functions and generic-Swift stay unnamed.
+- Restores three kinds of names into the main executable:
+  - **Objective-C** — real `-[Class method]` / `+[Class method]` from `__objc` metadata.
+  - **Swift class methods** — synthetic `Type.method<N>` from `__swift5` metadata (Swift stores
+    no method names, so the type name is real but the method part is kind + vtable index).
+  - **C++ virtual methods** — `Class::vfunc<N>` from Itanium RTTI (typeinfo + vtable), demangled.
+  - Works on both chained-fixups (iOS 15+) and classic binaries. Plain C static functions,
+    non-virtual C++, and generic Swift stay unnamed.
 - Non-fatal: if the binary can't be processed, generation continues without symbols.
 
 ```sh

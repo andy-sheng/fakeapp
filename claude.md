@@ -105,16 +105,22 @@ Xcode's build re-signs it, so the invalidated signature is fine. Non-fatal: any 
 just warns and continues. Default on; `--no-symbols` or `FAKEAPP_NO_SYMBOLS=1` skips it.
 Only the **main executable** is processed (not embedded frameworks).
 
-Recovers two kinds of symbols:
+Recovers three kinds of symbols:
 - **Objective-C**: real `-[Class method]` / `+[Class method]` names from `__objc` metadata.
-- **Swift class methods**: the fork parses `__swift5_types` → class descriptors → vtable
-  method descriptors and emits `Type.method<N>` / `Type.getter<N>` etc. Swift doesn't store
-  method *names* in metadata, so names are synthetic (real type name + method kind + vtable
-  index); addresses come from the method descriptor `Impl` and are validated to land in
-  `__text`. Generic classes and non-class methods (struct/enum, free functions) are not
-  covered. Verified: Doubao +56k Swift symbols, WeChat +4.7k, 100% on `LC_FUNCTION_STARTS`.
+- **Swift class methods**: parses `__swift5_types` → class descriptors → vtable method
+  descriptors → `Type.method<N>` / `Type.getter<N>`. Swift stores no method *names*, so names
+  are synthetic (real type name + method kind + vtable index); addresses from the descriptor
+  `Impl`. Generic classes / struct-enum / free functions not covered.
+- **C++ virtual methods**: parses Itanium **RTTI** — finds `typeinfo` (a data slot pointing at
+  a mangled type-name string), then the `vtable` referencing it, and emits `Class::vfunc<N>`
+  (name via `__cxa_demangle`, hence the engine links `-lc++`) for each virtual-function pointer.
+  Non-virtual functions and RTTI-disabled classes not covered.
 
-C/C++ static functions still stay unnamed (a future Ghidra→dSYM extension point).
+All three read the class-dump-normalized `machOFile.data`, so **chained-fixups** (iOS 15+) and
+classic-rebase binaries both work. Every emitted address is filtered to `__text`. Verified
+100% on `LC_FUNCTION_STARTS`: Doubao +56k Swift / +76k C++, WeChat +4.7k Swift / +539k C++.
+
+Plain C static functions still stay unnamed (a future Ghidra→dSYM extension point).
 
 Building the bundled binary — **key gotcha**: the upstream `tobefuturer/restore-symbol`
 pins a class-dump submodule (0xced, 2019) that predates **relative method lists**
