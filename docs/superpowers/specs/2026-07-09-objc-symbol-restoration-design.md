@@ -1,7 +1,7 @@
 # ObjC 符号还原（Symbol Restoration）设计
 
 - **日期**: 2026-07-09
-- **状态**: 已批准，待写实现计划
+- **状态**: 已实现并端到端验证（豆包 arm64，167k 符号）。见提交 `4140fde`。
 - **目标**: 从被逆向的解密 IPA 中提取可用符号，烤回 App 主二进制，使 Xcode/LLDB 调试时栈帧显示 Objective-C 类名/方法名，而非裸地址或 `___lldb_unnamed_symbol$$0x...`。
 
 ## 背景与动机
@@ -70,7 +70,7 @@ restore_symbols()
 - 预编译的 `restore-symbol`（universal：arm64 + x86_64，兼容 Apple Silicon 与 Intel Mac）放入 `fakesample/scripts/restore-symbol`，`chmod +x`。
 - 随 `fakesample/` 被 `build.sh` 打包（`tar czvf ... fakesample` → base64 → 嵌入 `fakesample_package` 变量）进 `bin/fakeapp`，与 `arm64-to-sim`、`optool` 同一机制。
 - 运行时 `prepare_packed_files()` 把模板解包到临时目录，引擎路径为 `<temp>/fakesample/scripts/restore-symbol`。
-- **选型约束**：优先选择维护活跃、明确支持 **arm64e + chained fixups（iOS 15+）** 的 restore-symbol fork 来构建二进制。
+- **引擎构建（实测定案）**：`tobefuturer/restore-symbol` 内置的 class-dump 子模块（0xced，2019）早于**相对方法列表**（relative method lists，Xcode 14+，二进制里出现 `__objc_methlist` 段），对现代 App 会崩溃并产出 0 符号。故 `scripts/build-restore-symbol.sh` 把 class-dump 换成支持相对方法列表的 fork（`andy-sheng/class-dump`），并直接 `xcodebuild`（**不走 `make`**，否则其 `git submodule update` 会把 class-dump 还原成旧版）。产物 universal（arm64+x86_64）。
 
 ## 行为规格
 
@@ -84,30 +84,34 @@ restore_symbols()
 - 符号还原是锦上添花，**绝不能中断转项目主流程**。
 - `symbolize_objc` 任何错误（引擎缺失、二进制不支持、写入失败）只 `echo` 警告并 `return 0`，`main()` 继续。
 - 结束时打印一行结果，例如：
-  - 成功：`[symbols] restored 4213 ObjC symbols into WeChat`
-  - 跳过：`[symbols] skipped (unsupported binary / arm64e chained fixups)`
+  - 成功：`[symbols] restored Grace: 167678 function symbols in symbol table`
+  - 跳过：`[symbols] skipped (executable not found)` / `[symbols] skipped (... restore-symbol failed, likely unsupported binary)`
   - 关闭：`[symbols] disabled (--no-symbols)`
 
-### arm64e 降级
-- 若选定 fork 无法处理某二进制的 arm64e/chained fixups，自动 skip 该二进制并提示，其余流程正常——仍是净增益（不会让老格式二进制失去符号，也不会让 arm64e 报错中断）。
+### 不支持二进制的降级
+- 若 restore-symbol 处理某二进制失败（格式不支持、写入失败等），只警告并跳过，其余流程正常——仍是净增益。
 
-## 关键风险与验证（硬性）
+## 关键风险与验证（已完成）
 
-**风险**：现代 App Store 应用（如微信）是 arm64e、iOS 15+ chained fixups。经典 restore-symbol 对该格式历史上会崩溃或写坏符号表。
+**原预判风险**：现代 App 是 arm64e / iOS 15+ chained fixups，经典 restore-symbol 会崩。
 
-**验证任务（不过则方案不算落地）**：
-1. 取一个**真·解密的 arm64e 二进制**（仓库内 `WeChat.app` 是空壳加密态，不可用；需另找）。
-2. 跑 `restore-symbol` → 用 `nm` 确认 `t/T` 函数符号数量显著增加、含 ObjC 方法名。
-3. 生成完整 fakeapp 项目 → Xcode 构建运行 → 在 LLDB / Xcode 栈帧中确认显示 `-[Class method]` 而非 `unnamed_symbol`。
-4. 若选定 fork 也搞不定 arm64e，落实「arm64e 自动 skip + 提示」的降级路径并验证其不中断主流程。
+**实测修正**：测试目标豆包（Grace）是 **arm64（非 arm64e）、`LC_DYLD_INFO_ONLY`（非 chained fixups）**，但仍会崩——真正的阻塞是**相对方法列表**（`__objc_methlist` 段），老 class-dump 解析不了。换 `andy-sheng/class-dump` fork 后解决。arm64e/chained fixups 的更强场景留待遇到时再验证（同样靠 fork 能力覆盖）。
+
+**验证结果（豆包 arm64，已通过）**：
+1. `restore-symbol`（fork 构建）：`nm` 的 `t/T` 函数符号 **0 → 167678**，含大量 `-[Class method]`/`+[Class method]`。
+2. `bin/fakeapp` 端到端生成项目，符号烤进 Payload 主二进制（5.5s）。
+3. Xcode 模拟器构建成功：主二进制 patch 成 platform 7、**167678 符号存活**、ad-hoc 签名有效。
+4. 模拟器运行时 `sample` 抓栈：显示 `-[TTNetworkManagerChromium ensureEngineStarted]` 等真实方法名（仅剩 ~38 帧 C/Swift 未符号化，属范围外）。同一次运行也验证了 LookinServer xcframework 模拟器 slice 已加载。
 
 ## 受影响文件
 
-- `fakeapp.sh`：新增 `restore_symbols()` + `symbolize_objc()`；`main()` 插入调用；参数解析支持 `--no-symbols`；`FAKEAPP_NO_SYMBOLS` 处理。
-- `fakesample/scripts/restore-symbol`：新增预编译二进制（universal）。
-- `build.sh`：无需改动（`fakesample/` 整体打包，二进制自动包含）——需确认打包后可执行位保留。
-- `CLAUDE.md`：在 `main()` 函数流、脚本说明中记录新步骤与开关。
-- `README.md`：文档化符号还原特性与 `--no-symbols`。
+- `fakeapp.sh`：新增 `restore_symbols()`（还原逻辑内联，未拆单独的 `symbolize_objc`）；`main()` 在 `update_bundle_id_config` 之后、`migrate_target` 之前插入调用；`parse_args` 支持 `--no-symbols`；`FAKEAPP_NO_SYMBOLS` 处理；帮助文档。✅
+- `fakesample/scripts/restore-symbol`：新增预编译 universal 二进制（fork 构建）。✅
+- `scripts/build-restore-symbol.sh`：新增可复现构建脚本（含 class-dump fork 替换）。✅
+- `.gitignore`：新增 `*.ipa`（避免测试 IPA 误提交）。✅
+- `build.sh`：无需改动（`fakesample/` 整体打包，二进制自动包含，可执行位保留，已验证）。✅
+- `CLAUDE.md`：`main()` 函数流 + 新增「Objective-C symbol restoration」小节。✅
+- `README.md`：尚未更新（可选后续）。
 
 ## 未来扩展点（非本次范围）
 
