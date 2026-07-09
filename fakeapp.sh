@@ -722,7 +722,8 @@ restore_symbols () {
 
 	echo "> [symbols] restoring ObjC symbols for $exec_name ...";
 	local tmp="$bin.symbolized";
-	if "$rs" -o "$tmp" "$bin" >/dev/null 2>&1 && [ -f "$tmp" ]; then
+	# 保留 stderr 让 restore-symbol 的扫描进度([scan] NN%)透传给用户; stdout 丢弃
+	if "$rs" -o "$tmp" "$bin" >/dev/null && [ -f "$tmp" ]; then
 		chmod +x "$tmp";
 		mv -f "$tmp" "$bin";
 		local count; count=$(nm "$bin" 2>/dev/null | grep -cE ' [tT] ');
