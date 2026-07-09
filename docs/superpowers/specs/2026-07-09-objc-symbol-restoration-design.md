@@ -70,7 +70,7 @@ restore_symbols()
 - 预编译的 `restore-symbol`（universal：arm64 + x86_64，兼容 Apple Silicon 与 Intel Mac）放入 `fakesample/scripts/restore-symbol`，`chmod +x`。
 - 随 `fakesample/` 被 `build.sh` 打包（`tar czvf ... fakesample` → base64 → 嵌入 `fakesample_package` 变量）进 `bin/fakeapp`，与 `arm64-to-sim`、`optool` 同一机制。
 - 运行时 `prepare_packed_files()` 把模板解包到临时目录，引擎路径为 `<temp>/fakesample/scripts/restore-symbol`。
-- **引擎构建（实测定案）**：`tobefuturer/restore-symbol` 内置的 class-dump 子模块（0xced，2019）早于**相对方法列表**（relative method lists，Xcode 14+，二进制里出现 `__objc_methlist` 段），对现代 App 会崩溃并产出 0 符号。故 `scripts/build-restore-symbol.sh` 把 class-dump 换成支持相对方法列表的 fork（`andy-sheng/class-dump`），并直接 `xcodebuild`（**不走 `make`**，否则其 `git submodule update` 会把 class-dump 还原成旧版）。产物 universal（arm64+x86_64）。
+- **引擎构建（实测定案）**：上游 `tobefuturer/restore-symbol` 内置的 class-dump 子模块（0xced，2019）早于**相对方法列表**（relative method lists，Xcode 14+，二进制里出现 `__objc_methlist` 段），对现代 App 会崩溃并产出 0 符号。维护的 fork **`andy-sheng/restore-symbol`** 已把 class-dump 子模块改指向 `andy-sheng/class-dump`（支持相对方法列表），因此自洽可直接构建。`scripts/build-restore-symbol.sh` 递归克隆该 fork 后 `xcodebuild` 即可。产物 universal（arm64+x86_64）。
 
 ## 行为规格
 

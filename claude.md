@@ -106,13 +106,14 @@ just warns and continues. Default on; `--no-symbols` or `FAKEAPP_NO_SYMBOLS=1` s
 Only the **main executable** is processed (not embedded frameworks); only ObjC names are
 recovered (C/Swift static functions stay unnamed — a future Ghidra→dSYM extension point).
 
-Building the bundled binary — **key gotcha**: `tobefuturer/restore-symbol`'s pinned
-class-dump submodule (0xced, 2019) predates **relative method lists** (Xcode 14+, marked
-by a `__objc_methlist` section) and crashes with 0 symbols on modern apps. So
-`scripts/build-restore-symbol.sh` swaps in a class-dump fork that handles relative method
-lists (`andy-sheng/class-dump`) and builds via `xcodebuild` directly (NOT `make`, whose
-`git submodule update` would revert the swap). Verified on Doubao (arm64, 167k symbols
-restored, visible as `-[Class method]` in live simulator stack traces).
+Building the bundled binary — **key gotcha**: the upstream `tobefuturer/restore-symbol`
+pins a class-dump submodule (0xced, 2019) that predates **relative method lists**
+(Xcode 14+, marked by a `__objc_methlist` section) and crashes with 0 symbols on modern
+apps. The maintained fork **`andy-sheng/restore-symbol`** repoints its class-dump
+submodule to `andy-sheng/class-dump` (which handles relative method lists), so it builds
+self-contained. `scripts/build-restore-symbol.sh` just clones that fork recursively and
+`xcodebuild`s it. Verified on Doubao (arm64, 167k symbols restored, visible as
+`-[Class method]` in live simulator stack traces).
 
 ### Key Functions
 
