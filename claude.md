@@ -103,8 +103,18 @@ metadata (`__objc_classlist` / `__objc_methlist` / …) and writing `-[Class met
 `+[Class method]` entries back into `LC_SYMTAB`. It edits the Payload binary in place;
 Xcode's build re-signs it, so the invalidated signature is fine. Non-fatal: any failure
 just warns and continues. Default on; `--no-symbols` or `FAKEAPP_NO_SYMBOLS=1` skips it.
-Only the **main executable** is processed (not embedded frameworks); only ObjC names are
-recovered (C/Swift static functions stay unnamed — a future Ghidra→dSYM extension point).
+Only the **main executable** is processed (not embedded frameworks).
+
+Recovers two kinds of symbols:
+- **Objective-C**: real `-[Class method]` / `+[Class method]` names from `__objc` metadata.
+- **Swift class methods**: the fork parses `__swift5_types` → class descriptors → vtable
+  method descriptors and emits `Type.method<N>` / `Type.getter<N>` etc. Swift doesn't store
+  method *names* in metadata, so names are synthetic (real type name + method kind + vtable
+  index); addresses come from the method descriptor `Impl` and are validated to land in
+  `__text`. Generic classes and non-class methods (struct/enum, free functions) are not
+  covered. Verified: Doubao +56k Swift symbols, WeChat +4.7k, 100% on `LC_FUNCTION_STARTS`.
+
+C/C++ static functions still stay unnamed (a future Ghidra→dSYM extension point).
 
 Building the bundled binary — **key gotcha**: the upstream `tobefuturer/restore-symbol`
 pins a class-dump submodule (0xced, 2019) that predates **relative method lists**
