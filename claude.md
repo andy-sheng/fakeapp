@@ -89,8 +89,30 @@ main()
   │     ├─> Restore Bundle ID
   │     ├─> Delete UISupportedDevices
   │     └─> Update CFBundleIconFiles
+  ├─> restore_symbols()       # Bake ObjC symbols into Payload main executable
   └─> migrate_target()        # Move project to current directory
 ```
+
+### Objective-C symbol restoration (`restore_symbols()`)
+
+The app's main executable is normally stripped, so Xcode/LLDB backtraces show
+`AppName`___lldb_unnamed_symbol$$0x...` instead of method names. `restore_symbols()`
+runs the bundled `restore-symbol` (`fakesample/scripts/restore-symbol`, packed like
+`arm64-to-sim`/`optool`) once at project-generation time, parsing the executable's ObjC
+metadata (`__objc_classlist` / `__objc_methlist` / …) and writing `-[Class method]` /
+`+[Class method]` entries back into `LC_SYMTAB`. It edits the Payload binary in place;
+Xcode's build re-signs it, so the invalidated signature is fine. Non-fatal: any failure
+just warns and continues. Default on; `--no-symbols` or `FAKEAPP_NO_SYMBOLS=1` skips it.
+Only the **main executable** is processed (not embedded frameworks); only ObjC names are
+recovered (C/Swift static functions stay unnamed — a future Ghidra→dSYM extension point).
+
+Building the bundled binary — **key gotcha**: `tobefuturer/restore-symbol`'s pinned
+class-dump submodule (0xced, 2019) predates **relative method lists** (Xcode 14+, marked
+by a `__objc_methlist` section) and crashes with 0 symbols on modern apps. So
+`scripts/build-restore-symbol.sh` swaps in a class-dump fork that handles relative method
+lists (`andy-sheng/class-dump`) and builds via `xcodebuild` directly (NOT `make`, whose
+`git submodule update` would revert the swap). Verified on Doubao (arm64, 167k symbols
+restored, visible as `-[Class method]` in live simulator stack traces).
 
 ### Key Functions
 

@@ -38,6 +38,10 @@ OPTIONS:
                                 (e.g. "Apple Development: Name (TEAMID)").
   -o, --output DIR              Output directory for the generated project.
                                 Default: current directory. Created if missing.
+      --no-symbols              Skip Objective-C symbol restoration (by default the
+                                app's stripped main executable gets its ObjC class /
+                                method names written back into the symbol table so
+                                Xcode/LLDB backtraces show -[Class method]).
   -h, --help                    Show this help and exit.
 
 EXAMPLES:
@@ -71,6 +75,7 @@ parse_args () {
 	requested_bundle_id="";
 	signing_certificate="";
 	output_dir=".";
+	no_symbols="";
 
 	while [ "$#" -gt 0 ]; do
 		case "$1" in
@@ -100,6 +105,9 @@ parse_args () {
 					exit 1;
 				}
 				output_dir="$1";
+				;;
+			--no-symbols)
+				no_symbols=1;
 				;;
 			-h|--help|help)
 				show_help;
@@ -694,6 +702,38 @@ migrate_target () {
 	mv "$working_tmp/$appname" "$output_dir/";
 }
 
+restore_symbols () {
+	# ObjC 符号还原: 用打包的 restore-symbol 解析 App 主二进制的 ObjC 元数据
+	# (类名/方法名), 把 -[Class method] 写回符号表, 让 Xcode/LLDB 栈帧显示真实
+	# 方法名而非裸地址。一次性烤进 Payload 主二进制, 后续 Xcode 构建照旧重签。
+	# 默认开启; --no-symbols 或 FAKEAPP_NO_SYMBOLS=1 关闭; 任何失败都不致命。
+	if [ -n "$no_symbols" ] || [ -n "${FAKEAPP_NO_SYMBOLS:-}" ]; then
+		echo "> [symbols] disabled (--no-symbols)";
+		return 0;
+	fi
+
+	local app_path="$working_tmp/$appname/Payload/$(basename "$EXTRACTED_APP_PATH")";
+	local exec_name; exec_name=$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$app_path/Info.plist" 2>/dev/null);
+	local bin="$app_path/$exec_name";
+	local rs="$working_tmp/$appname/scripts/restore-symbol";
+
+	[ -x "$rs" ] || { echo "> [symbols] skipped (restore-symbol not bundled)"; return 0; }
+	[ -n "$exec_name" ] && [ -f "$bin" ] || { echo "> [symbols] skipped (executable not found)"; return 0; }
+
+	echo "> [symbols] restoring ObjC symbols for $exec_name ...";
+	local tmp="$bin.symbolized";
+	if "$rs" -o "$tmp" "$bin" >/dev/null 2>&1 && [ -f "$tmp" ]; then
+		chmod +x "$tmp";
+		mv -f "$tmp" "$bin";
+		local count; count=$(nm "$bin" 2>/dev/null | grep -cE ' [tT] ');
+		echo "> [symbols] restored $exec_name: $count function symbols in symbol table";
+	else
+		rm -f "$tmp";
+		echo "> [symbols] skipped ($exec_name: restore-symbol failed, likely unsupported binary)";
+	fi
+	return 0;
+}
+
 main () {
 	case "${subcommand:-ipa}" in
 		install-skill)
@@ -724,6 +764,8 @@ main () {
 	update_info_plist;
 
 	update_bundle_id_config;
+
+	restore_symbols;
 
 	migrate_target;
 
