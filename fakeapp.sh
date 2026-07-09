@@ -722,12 +722,16 @@ restore_symbols () {
 
 	echo "> [symbols] restoring ObjC symbols for $exec_name ...";
 	local tmp="$bin.symbolized";
+	# 用 otool 读 LC_SYMTAB.nsyms 统计符号数——只读 load command, 瞬时完成。
+	# 不要用 `nm | grep -c`: 大 App(如微信符号化后 ~70 万符号)会跑几分钟, 像卡死。
+	local before after;
+	before=$(otool -l "$bin" 2>/dev/null | awk '/LC_SYMTAB/{f=1} f&&/nsyms/{print $2; exit}');
 	# 保留 stderr 让 restore-symbol 的扫描进度([scan] NN%)透传给用户; stdout 丢弃
 	if "$rs" -o "$tmp" "$bin" >/dev/null && [ -f "$tmp" ]; then
 		chmod +x "$tmp";
 		mv -f "$tmp" "$bin";
-		local count; count=$(nm "$bin" 2>/dev/null | grep -cE ' [tT] ');
-		echo "> [symbols] restored $exec_name: $count function symbols in symbol table";
+		after=$(otool -l "$bin" 2>/dev/null | awk '/LC_SYMTAB/{f=1} f&&/nsyms/{print $2; exit}');
+		echo "> [symbols] restored $exec_name: +$(( ${after:-0} - ${before:-0} )) symbols (nsyms ${before:-0} -> ${after:-0})";
 	else
 		rm -f "$tmp";
 		echo "> [symbols] skipped ($exec_name: restore-symbol failed, likely unsupported binary)";

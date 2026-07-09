@@ -722,12 +722,16 @@ restore_symbols () {
 
 	echo "> [symbols] restoring ObjC symbols for $exec_name ...";
 	local tmp="$bin.symbolized";
+	# 用 otool 读 LC_SYMTAB.nsyms 统计符号数——只读 load command, 瞬时完成。
+	# 不要用 `nm | grep -c`: 大 App(如微信符号化后 ~70 万符号)会跑几分钟, 像卡死。
+	local before after;
+	before=$(otool -l "$bin" 2>/dev/null | awk '/LC_SYMTAB/{f=1} f&&/nsyms/{print $2; exit}');
 	# 保留 stderr 让 restore-symbol 的扫描进度([scan] NN%)透传给用户; stdout 丢弃
 	if "$rs" -o "$tmp" "$bin" >/dev/null && [ -f "$tmp" ]; then
 		chmod +x "$tmp";
 		mv -f "$tmp" "$bin";
-		local count; count=$(nm "$bin" 2>/dev/null | grep -cE ' [tT] ');
-		echo "> [symbols] restored $exec_name: $count function symbols in symbol table";
+		after=$(otool -l "$bin" 2>/dev/null | awk '/LC_SYMTAB/{f=1} f&&/nsyms/{print $2; exit}');
+		echo "> [symbols] restored $exec_name: +$(( ${after:-0} - ${before:-0} )) symbols (nsyms ${before:-0} -> ${after:-0})";
 	else
 		rm -f "$tmp";
 		echo "> [symbols] skipped ($exec_name: restore-symbol failed, likely unsupported binary)";
@@ -775,7 +779,7 @@ main () {
 	echo ".app bundle: $(basename $EXTRACTED_APP_PATH)"
 	echo "Project path: $output_dir/$appname"
 }
-fakesample_package="H4sIACJZT2oAA+y9CXwURfY4PkcC4YgTgZGgoCMCglwJZICIUQYyOIEJRIEVFYQAgaBAYjLhWEWBZFzadlZ2FWVV1qwrLh6scRUI
+fakesample_package="H4sIAGBeT2oAA+y9CXwURfY4PkcC4YgTgZGgoCMCglwJZICIUQYyOIEJRIEVFYQAgaBAYjLhWEWBZFzadlZ2FWVV1qwrLh6scRUI
 SDAcQjiNEA4BuY+J4Qh3AiHze0d1T88kHPtf1+/v9/8yn0/SXd1Vr169evXqvVevqscmv5CSmTwxfUJKZ91/6xcVFdXdarXQtRtf
 o7rE8FX8LNHW6OiobtHWrtaulqjomK7R0TqL9b+GkeaXlelKzgBUkieNmZaZmjJp3HXyQbaxY28AR7RDvf4/8hvr7/9OIzrFDxox
 yJWWkfLr1gH06BYTc/3+j+7O/d81KsbatUs36P9uXaK66yxRvy4atf/+l/e/LvSuujqDTpeYPNoycJBlqEX88JmuHvx1gb++8Ifp
@@ -17209,7 +17213,7 @@ Ip/byOdl+LObpOshn8eQz2PJZy/5pMjnNvJ5Gf4kSqubOB/dpGTZeekmUwTdFPnc1lGVLbDgFQOvwh+9
 srHRrsZTSXCspcDfhXKGLjKad9UbAT14svCvutR4inxuI5+X4U/LELDAAgssWGswWf+DF/uBv9Uro9X6P1wvk/d/BoJo/c9rvf9j
 gQUWWHBk4f8Dq2LBOwAeQwA=
 "
-fakeapp_skill_package="H4sIACJZT2oAA+1aS2/jyBH2LhAEYc7JueA5rCRLlPWyPPLuIH7NjrKasWNrdmdPwxbZknpMkdwmaVkbLJBTfkCQQ+75G7nsfwiQ
+fakeapp_skill_package="H4sIAGBeT2oAA+1aS2/jyBH2LhAEYc7JueA5rCRLlPWyPPLuIH7NjrKasWNrdmdPwxbZknpMkdwmaVkbLJBTfkCQQ+75G7nsfwiQ
 a7C/JF81qYc9rwxgT5C1CtCQIrurquv76mF77Jf2xl3L9vZ2u9Uic93Jrtv1ZnbN7htUa9Xr9XajWW/XaLtWb223Nmj7zj2DpHEi
 NFwRgTeLxzIYvWUdlg2H79CTHYUW1/8X+cVvf7nx6cbGU+HSyTm9oFz42cav8Knj8x0+/P3v/53K/X7/LL/lHX/D59c3lnyyfP4b
 N5zYIop8aUc6vJSBCFy58cmnGz9u/evf//jhnz/ewiHX8jY5FVdPpPCkrrqp1jJIPKVv28Z787+2fSP/d+qt9gZd3bYjb5J7nv+N
