@@ -9,6 +9,8 @@ A tool for creating iOS debugging projects from decrypted IPA files. Debug and p
 - ⚙️ **Smart Info.plist** - Preserve all permissions, URL schemes, and configurations
 - 🔒 **Bundle ID control** - Keep template's Bundle ID to avoid conflicts
 - 🧹 **Auto cleanup** - Remove App Extensions and Watch app for easier signing
+- 🔤 **ObjC symbol restoration** - Rebuild `-[Class method]` names into the stripped binary so backtraces are readable ([details](#objective-c-symbol-restoration))
+- 📱 **Simulator support** - Run a decrypted device app on the Apple Silicon iOS Simulator, no certificate ([details](#run-on-simulator-apple-silicon-no-certificate))
 - 🔄 **MonkeyDev inspired** - Info.plist handling based on [MonkeyDev](https://github.com/AloneMonkey/MonkeyDev)
 
 ## Requirements
@@ -114,6 +116,7 @@ This will:
 - Copy app to `MyApp/Payload/`
 - Merge Info.plist settings
 - Remove PlugIns and Watch directories
+- Restore Objective-C symbols into the main binary (pass `--no-symbols` to skip)
 
 ### 2. Configure Code Signing
 
@@ -130,6 +133,30 @@ Build and run! All Xcode debugging features work:
 - Instruments
 - Location simulation
 
+## Objective-C Symbol Restoration
+
+A decrypted app's main executable is stripped, so Xcode/LLDB backtraces normally show
+`AppName`​`` ___lldb_unnamed_symbol$$0x...`` instead of real method names. When creating the
+project, FakeApp parses the executable's Objective-C metadata and writes
+`-[Class method]` / `+[Class method]` entries back into its symbol table, so backtraces,
+Instruments, and `atos` all show readable names.
+
+- Runs **once** at project-generation time, baked into `Payload/<App>.app`. Xcode re-signs
+  on build, so the modified binary is fine.
+- **On by default.** Disable with `--no-symbols` or `FAKEAPP_NO_SYMBOLS=1`.
+- Only the **main executable** and only **Objective-C** names are restored — C/Swift static
+  functions stay unnamed.
+- Non-fatal: if the binary can't be processed, generation continues without symbols.
+
+```sh
+bin/fakeapp app.ipa               # symbols restored (default)
+bin/fakeapp --no-symbols app.ipa  # skip symbol restoration
+```
+
+Powered by [restore-symbol](https://github.com/andy-sheng/restore-symbol) (a fork whose
+class-dump handles modern *relative method lists*); the bundled binary is rebuilt by
+`scripts/build-restore-symbol.sh`.
+
 ## Run on Simulator (Apple Silicon, no certificate)
 
 The generated project can also run a decrypted device app **on the iOS Simulator** —
@@ -141,7 +168,9 @@ no Apple Developer certificate and no physical device required.
 That's it. Behind the scenes, when the build targets `iphonesimulator` the build phase
 rewrites every Mach-O (the main executable plus all bundled frameworks) from the iOS
 device platform to the simulator platform and re-signs them ad-hoc. PDebug injection and
-LLDB debugging keep working exactly as on device.
+LLDB debugging keep working exactly as on device. [LookinServer](https://github.com/QMUI/LookinServer)
+ships as an xcframework with an arm64-simulator slice, so live UI inspection works on the
+simulator too.
 
 Command-line equivalent:
 
