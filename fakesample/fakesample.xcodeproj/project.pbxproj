@@ -291,7 +291,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "$SRCROOT/scripts/optool install -t $CODESIGNING_FOLDER_PATH/$EXECUTABLE_NAME -p \"@executable_path/Frameworks/PDebug.framework/PDebug\"";
+			shellScript = "\"$SRCROOT/scripts/optool\" install -t \"$CODESIGNING_FOLDER_PATH/$EXECUTABLE_NAME\" -p \"@executable_path/Frameworks/PDebug.framework/PDebug\"";
 		};
 		E16D62F22ED35217008B628A /* Inject LookinServer.framework Script */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -309,7 +309,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# LookinServer 由 xcframework 提供各平台 slice(含 arm64 模拟器)，真机/模拟器均注入\n$SRCROOT/scripts/optool install -t $CODESIGNING_FOLDER_PATH/$EXECUTABLE_NAME -p \"@executable_path/Frameworks/LookinServer.framework/LookinServer\"\n";
+			shellScript = "# LookinServer 由 xcframework 提供各平台 slice(含 arm64 模拟器)，真机/模拟器均注入\n\"$SRCROOT/scripts/optool\" install -t \"$CODESIGNING_FOLDER_PATH/$EXECUTABLE_NAME\" -p \"@executable_path/Frameworks/LookinServer.framework/LookinServer\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

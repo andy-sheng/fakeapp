@@ -33,12 +33,12 @@ find "$APP_DIR" -name "*.supp" -type f -delete 2>/dev/null || true
 
 echo "Re-signing frameworks in $FRAMEWORKS_DIR..."
 
-find "$FRAMEWORKS_DIR" -name "*.framework" -type d | while read framework; do
+find "$FRAMEWORKS_DIR" -name "*.framework" -type d | while IFS= read -r framework; do
     echo "Signing: $framework"
     codesign -fs "$EXPANDED_CODE_SIGN_IDENTITY" "$framework"
 done
 
-find "$FRAMEWORKS_DIR" -name "*.dylib" -type f | while read dylib; do
+find "$FRAMEWORKS_DIR" -name "*.dylib" -type f | while IFS= read -r dylib; do
     echo "Signing: $dylib"
     codesign -fs "$EXPANDED_CODE_SIGN_IDENTITY" "$dylib"
 done

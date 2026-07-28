@@ -437,8 +437,8 @@ escape_objc_string () {
 	printf "%s" "$1" | sed 's/\\/\\\\/g; s/"/\\"/g';
 }
 
-escape_pbxproj_string () {
-	printf "%s" "$1" | sed 's/\\/\\\\/g; s/"/\\"/g';
+escape_xml_string () {
+	printf "%s" "$1" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g';
 }
 
 extract_ipa () {
@@ -473,7 +473,7 @@ extract_ipa () {
 		exit 1;
 	}
 
-	echo "Found app bundle: $(basename $app_bundle)";
+	echo "Found app bundle: $(basename "$app_bundle")";
 
 	# Extract appname from .app bundle name
 	appname=$(basename "$app_bundle" .app);
@@ -529,19 +529,43 @@ prepare_packed_files () {
 	echo "> Unpacking fakesample.tgz";
 	base64 -D -o "$fakesample_tgz" <<< "$fakesample_package";
 	tar xzvf "$fakesample_tgz" -C "$working_tmp";
+
+	# project.pbxproj ships as an OpenStep plist, where a bare value cannot contain
+	# spaces. replace_files() substitutes the app name into value positions, so an
+	# app named "My Cool App" would produce `path = My Cool App.app;` and Xcode
+	# would reject the project as damaged. XML plist has no such restriction, and
+	# Xcode rewrites it back to OpenStep on first save.
+	local template_project="$working_tmp/fakesample/fakesample.xcodeproj/project.pbxproj";
+	[ -f "$template_project" ] && {
+		echo "> Converting project.pbxproj to XML plist format";
+		plutil -convert xml1 "$template_project" || {
+			echo "ERROR: Cannot convert project.pbxproj to XML plist format";
+			exit 1;
+		};
+	};
 	return 0;
 }
 
 replace_files () {
 	echo "> Rename fakesample files"
-	while read fakefile; do
-		local fakename=$(basename "$fakefile");
+	# App names may contain characters that are special to sed, and — for the XML
+	# files of the project — to XML itself. File names take the app name verbatim.
+	local plain_name; plain_name=$(escape_sed_replacement "$appname");
+	local xml_name; xml_name=$(escape_sed_replacement "$(escape_xml_string "$appname")");
+	while IFS= read -r fakefile; do
+		local fakename; fakename=$(basename "$fakefile");
 		[ -f "$fakefile" ] && {
 			echo "- replacing $fakename";
-			sed -i.bak "s/fakesample/$appname/g" "$fakefile" 2>/dev/null;
+			local replacement="$plain_name";
+			case "$fakefile" in
+				*.pbxproj|*.xcscheme|*.xcworkspacedata|*.plist|*.entitlements|*.storyboard|*.xib)
+					replacement="$xml_name";
+					;;
+			esac
+			sed -i.bak "s/fakesample/$replacement/g" "$fakefile" 2>/dev/null;
 			rm -rf "$fakefile.bak";
 		};
-		[[ "$(basename $fakefile)" == *fakesample* ]] && {
+		[[ "$fakename" == *fakesample* ]] && {
 			echo "- rename $fakename";
 			mv -v "$fakefile" "$(dirname "$fakefile")/${fakename/fakesample/$appname}";
 		};
@@ -561,10 +585,10 @@ copy_app_to_payload () {
 
 	# Copy the extracted .app bundle
 	cp -r "$EXTRACTED_APP_PATH" "$payload_dir/";
-	echo ".app bundle copied to $payload_dir/$(basename $EXTRACTED_APP_PATH)";
+	echo ".app bundle copied to $payload_dir/$(basename "$EXTRACTED_APP_PATH")";
 
 	# Remove PlugIns and Watch directories (as done in MonkeyDev)
-	local target_app_path="$payload_dir/$(basename $EXTRACTED_APP_PATH)";
+	local target_app_path="$payload_dir/$(basename "$EXTRACTED_APP_PATH")";
 
 	if [ -d "$target_app_path/PlugIns" ]; then
 		echo "> Removing PlugIns directory (App Extensions)";
@@ -609,18 +633,31 @@ update_bundle_id_config () {
 		exit 1;
 	}
 
+	# prepare_packed_files() converted the project to XML plist, so these match the
+	# placeholder values as their own <string> elements rather than OpenStep syntax.
 	sed -i.bak \
-		-e "s/PRODUCT_BUNDLE_IDENTIFIER = com\.example\.demo;/PRODUCT_BUNDLE_IDENTIFIER = $escaped_fake_bundle_id;/g" \
-		-e "s/PRODUCT_BUNDLE_IDENTIFIER = com\.example\.demo\.PDebug;/PRODUCT_BUNDLE_IDENTIFIER = $escaped_pdebug_bundle_id;/g" \
+		-e "s|<string>com\.example\.demo</string>|<string>$escaped_fake_bundle_id</string>|g" \
+		-e "s|<string>com\.example\.demo\.PDebug</string>|<string>$escaped_pdebug_bundle_id</string>|g" \
 		"$project_file";
 	rm -f "$project_file.bak";
 
+	# A silently unmatched substitution would ship a project still signing as
+	# com.example.demo, which only surfaces as an install failure much later.
+	grep -qF "<string>$FAKE_BUNDLE_ID</string>" "$project_file" || {
+		echo "ERROR: Failed to set Bundle ID in project file: $project_file";
+		exit 1;
+	};
+
 	if [ -n "$SIGNING_CERTIFICATE" ]; then
-		escaped_certificate=$(escape_sed_replacement "$(escape_pbxproj_string "$SIGNING_CERTIFICATE")");
+		escaped_certificate=$(escape_sed_replacement "$(escape_xml_string "$SIGNING_CERTIFICATE")");
 		sed -i.bak \
-			-e "s/\"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]\" = \"[^\"]*\";/\"CODE_SIGN_IDENTITY[sdk=iphoneos*]\" = \"$escaped_certificate\";/g" \
+			-e "s|<string>iPhone Developer</string>|<string>$escaped_certificate</string>|g" \
 			"$project_file";
 		rm -f "$project_file.bak";
+		grep -qF "<string>$(escape_xml_string "$SIGNING_CERTIFICATE")</string>" "$project_file" || {
+			echo "ERROR: Failed to set code signing identity in project file: $project_file";
+			exit 1;
+		};
 	fi
 
 	plist_set_string "CFBundleIdentifier" "$FAKE_BUNDLE_ID" "$payload_app_info_plist";
@@ -775,7 +812,7 @@ main () {
 	migrate_target;
 
 	echo "Fake app [$appname] created with IPA integration."
-	echo "Original IPA: $(basename $ipa_path)"
-	echo ".app bundle: $(basename $EXTRACTED_APP_PATH)"
+	echo "Original IPA: $(basename "$ipa_path")"
+	echo ".app bundle: $(basename "$EXTRACTED_APP_PATH")"
 	echo "Project path: $output_dir/$appname"
 }

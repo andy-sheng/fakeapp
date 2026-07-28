@@ -9,7 +9,7 @@ fi
 rm -rf "$CODESIGNING_FOLDER_PATH";
 
 cp -av "$SRCROOT/Payload/$FULL_PRODUCT_NAME" "$CODESIGNING_FOLDER_PATH";
-rm -f $CODESIGNING_FOLDER_PATH/embedded.mobileprovision;
+rm -f "$CODESIGNING_FOLDER_PATH/embedded.mobileprovision";
 
 
 if [ -f "${CODESIGNING_FOLDER_PATH}/../embedded.mobileprovision" ]; then
@@ -17,7 +17,7 @@ if [ -f "${CODESIGNING_FOLDER_PATH}/../embedded.mobileprovision" ]; then
     mv "${CODESIGNING_FOLDER_PATH}/../embedded.mobileprovision" "${CODESIGNING_FOLDER_PATH}"
 fi
 
-chmod +x $CODESIGNING_FOLDER_PATH/$EXECUTABLE_NAME
+chmod +x "$CODESIGNING_FOLDER_PATH/$EXECUTABLE_NAME"
 
 # 按目标平台分流：
 #   模拟器(iphonesimulator) -> Mach-O platform 改写(2->7) + ad-hoc 签名(免证书)

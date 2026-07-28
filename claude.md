@@ -150,6 +150,21 @@ self-contained. `scripts/build-restore-symbol.sh` just clones that fork recursiv
 - Base64 decodes embedded `fakesample_package` variable
 - Extracts template to temporary directory
 - Template contains complete Xcode project structure
+- Converts `project.pbxproj` to **XML plist** via `plutil -convert xml1`
+
+**Why the XML conversion (keep it):** the template ships `project.pbxproj` in
+Xcode's OpenStep format, where a bare value cannot contain spaces.
+`replace_files()` substitutes the app name into value positions
+(`path = fakesample.app;`, `name = `, `productName = `, `INFOPLIST_FILE = `), so
+an app bundle named `Fencing Replay AI.app` produced
+`path = Fencing Replay AI.app;` and Xcode rejected the whole project as
+*"damaged … due to a parse error"*. XML plist has no bare-value restriction, so
+any app name is safe without per-site quoting; Xcode reads it fine and rewrites
+it back to OpenStep on first save. Consequence: anything editing the generated
+project must target XML syntax — `update_bundle_id_config()` matches
+`<string>com.example.demo</string>` / `<string>iPhone Developer</string>`, not
+`KEY = value;`, and verifies the substitution landed (a silent miss would ship a
+project still signing as `com.example.demo`).
 
 #### 3. `replace_files()`
 - Recursively processes all files in template
@@ -157,6 +172,18 @@ self-contained. `scripts/build-restore-symbol.sh` just clones that fork recursiv
 - Renames files containing "fakesample" in filename
 - Uses `sed` for content replacement
 - Processes in reverse order (deepest first) for safe renaming
+- Escapes the app name per file type: XML-escaped (`& < >`) for `.pbxproj` /
+  `.xcscheme` / `.xcworkspacedata` / `.plist`, sed-escaped everywhere else,
+  verbatim for file names
+
+**App names with spaces:** everything downstream must quote paths, because the
+Xcode target name — and therefore `PRODUCT_NAME`, `EXECUTABLE_NAME`,
+`FULL_PRODUCT_NAME`, and `CODESIGNING_FOLDER_PATH` — inherits the spaces, and
+`PRODUCT_NAME` must keep matching the Payload bundle name for
+`replace_app.sh`'s `cp "$SRCROOT/Payload/$FULL_PRODUCT_NAME"` to resolve. The
+non-obvious spots are the **`optool` inject build phases inside the template
+pbxproj** (`shellScript` values, not files under `scripts/`), which silently
+fail the build with `No such file or directory` when unquoted.
 
 #### 4. `copy_app_to_payload()`
 - Copies extracted `.app` bundle to `Payload/` directory
