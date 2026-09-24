@@ -17,6 +17,7 @@ static NSString *kOriginalBundleID = nil;
 // C function pointers
 static CFStringRef (*orig_CFBundleGetIdentifier)(CFBundleRef bundle) = NULL;
 static CFTypeRef (*orig_CFBundleGetValueForInfoDictionaryKey)(CFBundleRef bundle, CFStringRef key) = NULL;
+static CFBundleRef (*orig_CFBundleGetBundleWithIdentifier)(CFStringRef bundleID) = NULL;
 
 #pragma mark - C Function Hooks
 
@@ -52,6 +53,23 @@ CFTypeRef hook_CFBundleGetValueForInfoDictionaryKey(CFBundleRef bundle, CFString
     }
 
     return value;
+}
+
+// The on-disk Info.plist still carries the project Bundle ID, so CFBundle's
+// identifier registry doesn't know the original one. Resolve it to the main bundle,
+// otherwise lookups keyed on the (hooked) main bundle identifier come back empty.
+CFBundleRef hook_CFBundleGetBundleWithIdentifier(CFStringRef bundleID)
+{
+    if (bundleID != NULL && kOriginalBundleID != nil &&
+        CFStringCompare(bundleID, (__bridge CFStringRef)kOriginalBundleID, 0) == kCFCompareEqualTo) {
+        return CFBundleGetMainBundle();
+    }
+
+    if (orig_CFBundleGetBundleWithIdentifier) {
+        return orig_CFBundleGetBundleWithIdentifier(bundleID);
+    }
+
+    return NULL;
 }
 
 #pragma mark - NSBundle Category Hook
@@ -125,6 +143,18 @@ CFTypeRef hook_CFBundleGetValueForInfoDictionaryKey(CFBundleRef bundle, CFString
     return originalDict;
 }
 
+// CoreUI loads the main bundle's Assets.car via
+// +bundleWithIdentifier:[mainBundle bundleIdentifier]; with the hooked identifier
+// that returns nil and every imageNamed:/colorNamed:/NSDataAsset lookup fails.
++ (NSBundle *)hook_bundleWithIdentifier:(NSString *)identifier
+{
+    if (kOriginalBundleID && [identifier isEqualToString:kOriginalBundleID]) {
+        return [NSBundle mainBundle];
+    }
+
+    return [self hook_bundleWithIdentifier:identifier];
+}
+
 @end
 
 #pragma mark - BundleIDHook Implementation
@@ -171,18 +201,24 @@ CFTypeRef hook_CFBundleGetValueForInfoDictionaryKey(CFBundleRef bundle, CFString
                             original:@selector(infoDictionary)
                            swizzled:@selector(hook_infoDictionary)];
 
-    NSLog(@"[BundleIDHook] ObjC methods hooked: bundleIdentifier, objectForInfoDictionaryKey:, infoDictionary");
+    // 4. Hook +bundleWithIdentifier: (class method, so swizzle on the metaclass)
+    [NSBundle swizzleInstanceMethod:object_getClass(bundleClass)
+                            original:@selector(bundleWithIdentifier:)
+                           swizzled:@selector(hook_bundleWithIdentifier:)];
+
+    NSLog(@"[BundleIDHook] ObjC methods hooked: bundleIdentifier, objectForInfoDictionaryKey:, infoDictionary, +bundleWithIdentifier:");
 }
 
 + (void)installCFunctionHooks
 {
     // Hook C functions using fishhook
-    rebind_symbols((struct rebinding[2]){
+    rebind_symbols((struct rebinding[3]){
         {"CFBundleGetIdentifier", hook_CFBundleGetIdentifier, (void **)&orig_CFBundleGetIdentifier},
-        {"CFBundleGetValueForInfoDictionaryKey", hook_CFBundleGetValueForInfoDictionaryKey, (void **)&orig_CFBundleGetValueForInfoDictionaryKey}
-    }, 2);
+        {"CFBundleGetValueForInfoDictionaryKey", hook_CFBundleGetValueForInfoDictionaryKey, (void **)&orig_CFBundleGetValueForInfoDictionaryKey},
+        {"CFBundleGetBundleWithIdentifier", hook_CFBundleGetBundleWithIdentifier, (void **)&orig_CFBundleGetBundleWithIdentifier}
+    }, 3);
 
-    NSLog(@"[BundleIDHook] C functions hooked: CFBundleGetIdentifier, CFBundleGetValueForInfoDictionaryKey");
+    NSLog(@"[BundleIDHook] C functions hooked: CFBundleGetIdentifier, CFBundleGetValueForInfoDictionaryKey, CFBundleGetBundleWithIdentifier");
 }
 
 + (void)testHooks

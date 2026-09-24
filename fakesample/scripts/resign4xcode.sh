@@ -10,11 +10,6 @@ echo  "------------------------- resign -------"
 # env
 echo  "$EXPANDED_CODE_SIGN_IDENTITY"
 
-if [ ! -d "$FRAMEWORKS_DIR" ]; then
-    echo "Error: Frameworks directory not found: $FRAMEWORKS_DIR"
-    exit 1
-fi
-
 if [ ! -d "$APP_DIR" ]; then
     echo "Error: App directory not found: $APP_DIR"
     exit 1
@@ -30,6 +25,11 @@ find "$APP_DIR" -name "*.sinf" -type f -delete 2>/dev/null || true
 
 # Remove .supp files from both app and frameworks directories
 find "$APP_DIR" -name "*.supp" -type f -delete 2>/dev/null || true
+
+if [ ! -d "$FRAMEWORKS_DIR" ]; then
+    echo "No Frameworks directory in $APP_DIR, nothing to re-sign."
+    exit 0
+fi
 
 echo "Re-signing frameworks in $FRAMEWORKS_DIR..."
 

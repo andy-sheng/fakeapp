@@ -254,6 +254,14 @@ Update CFBundleIconFiles → point to template icon
   - Behavior modification
   - Logging and debugging
 
+**`BundleIDHook` must also hook `+[NSBundle bundleWithIdentifier:]`** (and
+`CFBundleGetBundleWithIdentifier`), mapping the original ID back to the main bundle.
+The on-disk Info.plist keeps the project Bundle ID, so CFBundle's identifier registry
+only knows that one. CoreUI loads the main bundle's `Assets.car` via
+`+bundleWithIdentifier:[mainBundle bundleIdentifier]`; with only `bundleIdentifier`
+hooked that lookup returns nil and every `imageNamed:` / `colorNamed:` / `NSDataAsset`
+from `Assets.car` silently returns nil (loose files in the bundle still load).
+
 ### Build Phases
 
 **Main app "Run Script" phase:**
