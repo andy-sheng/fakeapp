@@ -331,16 +331,24 @@ All of this is packaged into the single `bin/fakeapp` executable, so users only 
 ## Releasing
 
 The Homebrew formula lives at [`Formula/fakeapp.rb`](Formula/fakeapp.rb) and builds
-`bin/fakeapp` from source on install. Cutting a release is one command:
+`bin/fakeapp` from source on install. Prepare and push a release in one command:
 
 ```sh
-scripts/brew-release.sh 1.0.0   # first release; matches the committed VERSION
+scripts/brew-release.sh 1.2.0
 ```
 
-This bumps `VERSION`, creates and pushes the `v1.0.0` git tag, downloads the
-GitHub source tarball for that tag, computes its `sha256`, rewrites `url`/`sha256`
-in the formula, and commits the change. Use `--no-push` to stage everything
-locally first, or `-y` to skip the confirmation prompt.
+The helper requires a clean tree, updates `VERSION`, rebuilds `bin/fakeapp`, runs
+the macOS checks, commits those files, and then creates and atomically pushes the
+annotated `v1.2.0` tag. Use `--no-push` to prepare the commit and tag locally, or
+`-y` to skip the confirmation prompt.
+
+Pushing a semantic `vX.Y.Z` tag on the default branch triggers
+[`release.yml`](.github/workflows/release.yml). It verifies that the tag matches
+`VERSION`, rebuilds and tests the tool on macOS, creates or refreshes the GitHub
+Release with the standalone `fakeapp` command, a deterministic source archive,
+and `SHA256SUMS`, then commits the release URL and checksum to the formula on the
+default branch. Invalid tags or tags outside the default branch fail before
+publishing.
 
 ### Publishing the Homebrew tap
 
@@ -358,12 +366,14 @@ git remote add origin git@github.com:andy-sheng/homebrew-fakeapp.git
 git push -u origin main
 ```
 
-After that, point the release script at your tap checkout so each release also
-updates the published formula:
+To let the release workflow update the tap automatically, add a repository secret
+named `HOMEBREW_TAP_TOKEN`. It must be a fine-grained token with Contents write
+access to `andy-sheng/homebrew-fakeapp`. Without the secret, the GitHub Release
+and the formula in this repository are still updated, and the external tap step
+is skipped.
 
-```sh
-scripts/brew-release.sh 1.0.1 --tap-dir ../homebrew-fakeapp   # subsequent releases
-```
+The workflow writes `Formula/fakeapp.rb` directly through GitHub's Contents API,
+so no tap checkout is needed on the release machine.
 
 Users then upgrade with `brew update && brew upgrade fakeapp`.
 

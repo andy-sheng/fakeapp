@@ -12,7 +12,7 @@ trap 'rm -rfv $working_tmp' EXIT SIGHUP SIGINT SIGQUIT;
 main () {
 	echo "> Packing fakesample..."
 	local fakesample_package=fakesample.tgz;
-	tar czvf $working_tmp/$fakesample_package fakesample;
+	tar czf $working_tmp/$fakesample_package fakesample;
 	cp ./fakeapp.sh $fakeapp_bin;
 	printf "fakesample_package=\"" >> $fakeapp_bin;
 	base64 -b 100 -i "$working_tmp/$fakesample_package" >> $fakeapp_bin;
@@ -21,7 +21,7 @@ main () {
 	echo "> Packing skills..."
 	local skill_package=fakeapp_skill.tgz;
 	# Pack the contents of skills/ so it unpacks to <tmp>/skills/<name>.
-	tar czvf $working_tmp/$skill_package -C skills .;
+	tar czf $working_tmp/$skill_package -C skills .;
 	printf "fakeapp_skill_package=\"" >> $fakeapp_bin;
 	base64 -b 100 -i "$working_tmp/$skill_package" >> $fakeapp_bin;
 	echo "\"" >> $fakeapp_bin;

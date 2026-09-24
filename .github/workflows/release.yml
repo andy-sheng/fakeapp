@@ -1,0 +1,142 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fakeapp-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate release tag
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "ERROR: release tag must look like v1.2.3 (got: $tag)"
+            exit 1
+          }
+          [[ "$(tr -d '[:space:]' < VERSION)" == "$version" ]] || {
+            echo "ERROR: VERSION must be $version before creating $tag"
+            exit 1
+          }
+
+          git fetch origin "$DEFAULT_BRANCH"
+          git merge-base --is-ancestor "$GITHUB_SHA" "origin/$DEFAULT_BRANCH" || {
+            echo "ERROR: $tag does not point to a commit on $DEFAULT_BRANCH"
+            exit 1
+          }
+
+      - name: Build and test
+        run: bash scripts/ci.sh
+
+      - name: Package release assets
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+
+          cp bin/fakeapp dist/fakeapp
+          chmod 755 dist/fakeapp
+
+          git archive --format=tar --prefix="fakeapp-$version/" "$GITHUB_SHA" \
+            | gzip -n > "dist/fakeapp-$version.tar.gz"
+
+          (
+            cd dist
+            shasum -a 256 fakeapp "fakeapp-$version.tar.gz" > SHA256SUMS
+          )
+
+      - name: Publish GitHub release
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" \
+              dist/fakeapp \
+              "dist/fakeapp-$version.tar.gz" \
+              dist/SHA256SUMS \
+              --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              dist/fakeapp \
+              "dist/fakeapp-$version.tar.gz" \
+              dist/SHA256SUMS \
+              --verify-tag \
+              --title "fakeapp $version" \
+              --generate-notes
+          fi
+
+      - name: Update formula on the default branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          archive="dist/fakeapp-$version.tar.gz"
+          sha256="$(shasum -a 256 "$archive" | awk '{print $1}')"
+
+          git fetch origin "$DEFAULT_BRANCH"
+          git switch --force-create formula-update "origin/$DEFAULT_BRANCH"
+          bash scripts/update-formula.sh "$version" "$sha256" "$GITHUB_REPOSITORY"
+
+          if git diff --quiet -- Formula/fakeapp.rb; then
+            echo "Formula/fakeapp.rb already points at $GITHUB_REF_NAME"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/fakeapp.rb
+          git commit -m "release: update Homebrew formula for $GITHUB_REF_NAME"
+          git push origin "HEAD:$DEFAULT_BRANCH"
+
+      - name: Update optional Homebrew tap
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${HOMEBREW_TAP_TOKEN:-}" ]]; then
+            echo "HOMEBREW_TAP_TOKEN is not configured; skipping the external tap."
+            exit 0
+          fi
+
+          tap_repo="$GITHUB_REPOSITORY_OWNER/homebrew-fakeapp"
+          path="Formula/fakeapp.rb"
+          content="$(base64 < "$path" | tr -d '\n')"
+          current_sha="$(GH_TOKEN="$HOMEBREW_TAP_TOKEN" gh api \
+            "repos/$tap_repo/contents/$path" --jq .sha 2>/dev/null || true)"
+
+          args=(
+            --method PUT
+            "repos/$tap_repo/contents/$path"
+            -f "message=fakeapp ${GITHUB_REF_NAME#v}"
+            -f "content=$content"
+          )
+          if [[ -n "$current_sha" ]]; then
+            args+=(-f "sha=$current_sha")
+          fi
+
+          GH_TOKEN="$HOMEBREW_TAP_TOKEN" gh api "${args[@]}" >/dev/null

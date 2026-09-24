@@ -25,7 +25,9 @@ fakeapp/
 │   ├── fakesample.xcodeproj # Xcode project template
 │   └── scripts/             # Build phase scripts (resign, etc.)
 ├── Formula/fakeapp.rb       # Homebrew formula (builds bin/fakeapp from source)
-├── scripts/brew-release.sh  # Tag a release + refresh the formula's url/sha256
+├── scripts/brew-release.sh  # Build/test/version commit + tag/push helper
+├── scripts/ci.sh            # Shared macOS build and test checks
+├── scripts/update-formula.sh # Rewrite formula for a published release asset
 ├── skills/fakeapp/SKILL.md  # Bundled agent skill (embedded into bin/fakeapp)
 ├── VERSION                  # Current release version
 └── README.md                # User documentation
@@ -511,19 +513,15 @@ Method original = class_getInstanceMethod([NSURLSession class], @selector(dataTa
 
 ### Releasing via Homebrew
 
-The tool is distributed as a Homebrew formula (`Formula/fakeapp.rb`). The formula
-runs `build.sh` at install time, so the embedded template always matches the
-released source revision — there is no need to commit a prebuilt binary for the
-formula's sake.
+The tool is distributed as a Homebrew formula (`Formula/fakeapp.rb`). Prepare a
+release with `scripts/brew-release.sh 1.2.0` (or add `--no-push` for a local-only
+dry run). The helper updates `VERSION`, rebuilds `bin/fakeapp`, runs the shared
+macOS checks, commits, tags that commit, and atomically pushes the branch and tag.
 
-Cut a release with the helper:
-
-```bash
-scripts/brew-release.sh 1.0.1            # bump VERSION, tag v1.0.1, push,
-                                          # recompute sha256, rewrite the formula
-scripts/brew-release.sh 1.0.1 --no-push  # prepare locally without pushing
-scripts/brew-release.sh 1.0.1 --tap-dir ../homebrew-fakeapp   # also update the tap
-```
+The tag-triggered `.github/workflows/release.yml` validates that `vX.Y.Z` matches
+the committed `VERSION`, publishes the binary/source/checksum assets, and updates
+the formula on the default branch. If `HOMEBREW_TAP_TOKEN` is configured, it also
+copies the formula to `andy-sheng/homebrew-fakeapp` through GitHub's Contents API.
 
 Install paths:
 - Tap: `brew install andy-sheng/fakeapp/fakeapp` (needs a `homebrew-fakeapp` tap repo).
