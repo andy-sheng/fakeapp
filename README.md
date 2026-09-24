@@ -177,6 +177,15 @@ LLDB debugging keep working exactly as on device. [LookinServer](https://github.
 ships as an xcframework with an arm64-simulator slice, so live UI inspection works on the
 simulator too.
 
+Some device APIs don't exist on the simulator (e.g. MetricKit's
+`_MXSignpostMetricsSnapshot`, or whole frameworks such as MetalFX), and dyld aborts
+launch on the first one it can't bind. The simulator build resolves every import of the
+main executable and bundled frameworks against the target simulator runtime's own
+dylibs, exactly as dyld would, and weak-links only the ones that don't resolve (a
+missing framework becomes a weak dylib). Everything that resolves is left untouched,
+and the build log lists what was weakened as warnings. A weakened API is `NULL` at
+runtime, so the app still crashes if it calls one without checking.
+
 Command-line equivalent:
 
 ```bash

@@ -317,6 +317,17 @@ Gotchas (encoded in the scripts, keep them):
   `FBSApplicationLibrary returned nil`.
 - Apple Silicon only. Hardware/private-capability features (camera, RTC, push,
   Keychain, IAP) may fail at runtime; launch + UI + local logic work.
+- **Device-only imports** (e.g. MetricKit `__MXSignpostMetricsSnapshot` from the
+  `mxSignpost` macros, or whole frameworks like MetalFX/MediaSetup) abort dyld on the
+  simulator. `patch_sim.sh` runs `patch_weak_imports.py` on every patched Mach-O: each
+  import is resolved against the target runtime (`TARGET_DEVICE_IDENTIFIER` → `simctl`
+  `runtimeRoot`; all builds sharing that runtime identifier are checked) via export trie +
+  `LC_REEXPORT_DYLIB`, and only unresolvable ones get the weak bit (chained fixups or bind
+  opcodes); a missing dylib becomes `LC_LOAD_WEAK_DYLIB`. Lookup order must mirror
+  dyld_sim: runtime root, then the **host file system** (libsystem_pthread/kernel come from
+  the host via `libsystem_sim_*_host`), but **never the host dyld shared cache** — dyld_sim
+  reports `no such file, not in dyld cache` for e.g. MetalFX even though macOS has it.
+  Skipping the host fallback flags hundreds of libSystem symbols falsely.
 
 ## Technical Details
 

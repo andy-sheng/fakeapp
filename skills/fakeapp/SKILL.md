@@ -55,6 +55,11 @@ binaries are encrypted and will not run.
    `com.example.fakeapp.<app>`), not the app's original ID, or launch fails with
    `FBSApplicationLibrary returned nil`.
 
+   Imports the simulator runtime lacks (device-only symbols or frameworks) are
+   detected per build against the target runtime and weak-linked automatically;
+   the build log lists them as `warning: [fakeapp] ...`. Those APIs are `NULL` at
+   runtime, so a crash inside one of them on the simulator is expected.
+
 ## Injecting code
 
 Edit `<AppName>/PDebug/PDebugEntry.m`. Its `+load` runs before the app's

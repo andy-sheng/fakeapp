@@ -13,7 +13,9 @@
 set -uo pipefail
 
 APP_DIR="${CODESIGNING_FOLDER_PATH:-$1}"
-A2S="$(cd "$(dirname "$0")" && pwd)/arm64-to-sim"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+A2S="$SCRIPT_DIR/arm64-to-sim"
+MACHOS=()
 # 改写 BUILD_VERSION 时会覆盖 minos/sdk，取低一点更保险
 MINOS="${IPHONEOS_DEPLOYMENT_TARGET%%.*}"; MINOS="${MINOS:-13}"
 SDK=17
@@ -40,6 +42,7 @@ patch_macho() {
     local f="$1"
     file "$f" 2>/dev/null | grep -q "Mach-O" || return 0
     thin_to_arm64 "$f" || return 0
+    MACHOS+=("$f")
     # 用 bash 原生子串匹配，避免 `echo "$info" | grep` 在 pipefail 下因
     # grep 提前退出导致 echo 收到 SIGPIPE 而误判 (大输出 >16KB 管道缓冲时触发)
     local info; info=$(otool -l "$f" 2>/dev/null)
@@ -66,6 +69,13 @@ if [ -d "$FW_DIR" ]; then
     while IFS= read -r dl; do
         patch_macho "$dl"
     done < <(find "$FW_DIR" -name "*.dylib" -type f)
+fi
+
+# 2.5) 只把目标模拟器运行时里确实解析不到的导入改成 weak (dyld 遇到第一个就会中止启动)
+#      逐个符号对照运行时真实 dylib 的导出表判断，能解析的一律不动
+if [ "${#MACHOS[@]}" -gt 0 ]; then
+    python3 "$SCRIPT_DIR/patch_weak_imports.py" "${MACHOS[@]}" \
+        || echo "warning: [patch_sim] weak import 检查失败，已跳过"
 fi
 
 # 3) ad-hoc 重签 Payload 自带的框架 (主程序由 Xcode 末尾自动签)

@@ -40,8 +40,8 @@ expected_fake_bundle_id="com.example.fakeapp.target"
 expected_debug_bundle_id="com.example.fakeapp.target.PDebug"
 
 payload_bundle_id="$("$PLISTBUDDY" -c "Print CFBundleIdentifier" "$output/Target/Payload/Target.app/Info.plist")"
-project_bundle_id_count="$(grep -c "PRODUCT_BUNDLE_IDENTIFIER = $expected_fake_bundle_id;" "$output/Target/Target.xcodeproj/project.pbxproj")"
-debug_bundle_id_count="$(grep -c "PRODUCT_BUNDLE_IDENTIFIER = $expected_debug_bundle_id;" "$output/Target/Target.xcodeproj/project.pbxproj")"
+project_bundle_id_count="$(grep -Fc "<string>$expected_fake_bundle_id</string>" "$output/Target/Target.xcodeproj/project.pbxproj")"
+debug_bundle_id_count="$(grep -Fc "<string>$expected_debug_bundle_id</string>" "$output/Target/Target.xcodeproj/project.pbxproj")"
 
 if [ "$payload_bundle_id" != "$expected_fake_bundle_id" ]; then
 	echo "Expected Payload bundle ID $expected_fake_bundle_id, got $payload_bundle_id"
@@ -70,9 +70,9 @@ custom_certificate="Apple Development: Test User (ABCDE12345)"
 (cd "$custom_output" && "$REPO_ROOT/bin/fakeapp" --bundle-id "$custom_bundle_id" --certificate "$custom_certificate" "$tmpdir/Target.ipa" >/dev/null)
 
 custom_payload_bundle_id="$("$PLISTBUDDY" -c "Print CFBundleIdentifier" "$custom_output/Target/Payload/Target.app/Info.plist")"
-custom_project_bundle_id_count="$(grep -c "PRODUCT_BUNDLE_IDENTIFIER = $custom_bundle_id;" "$custom_output/Target/Target.xcodeproj/project.pbxproj")"
-custom_debug_bundle_id_count="$(grep -c "PRODUCT_BUNDLE_IDENTIFIER = $custom_bundle_id.PDebug;" "$custom_output/Target/Target.xcodeproj/project.pbxproj")"
-custom_certificate_count="$(grep -Fc "\"CODE_SIGN_IDENTITY[sdk=iphoneos*]\" = \"$custom_certificate\";" "$custom_output/Target/Target.xcodeproj/project.pbxproj")"
+custom_project_bundle_id_count="$(grep -Fc "<string>$custom_bundle_id</string>" "$custom_output/Target/Target.xcodeproj/project.pbxproj")"
+custom_debug_bundle_id_count="$(grep -Fc "<string>$custom_bundle_id.PDebug</string>" "$custom_output/Target/Target.xcodeproj/project.pbxproj")"
+custom_certificate_count="$(grep -Fc "<string>$custom_certificate</string>" "$custom_output/Target/Target.xcodeproj/project.pbxproj")"
 
 if [ "$custom_payload_bundle_id" != "$custom_bundle_id" ]; then
 	echo "Expected custom Payload bundle ID $custom_bundle_id, got $custom_payload_bundle_id"
