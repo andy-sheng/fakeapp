@@ -2,8 +2,8 @@ class Fakeapp < Formula
   desc "Build a debuggable Xcode project from a decrypted iOS IPA"
   homepage "https://github.com/andy-sheng/fakeapp"
   # `url`/`sha256` are maintained by the tag-triggered release workflow.
-  url "https://github.com/andy-sheng/fakeapp/archive/refs/tags/v1.1.4.tar.gz"
-  sha256 "c29604522c3eafc2c3b4637a75b5ee15324b915d04c875bacdba69f9225ea858"
+  url "https://github.com/andy-sheng/fakeapp/releases/download/v1.1.5/fakeapp-1.1.5.tar.gz"
+  sha256 "d46322c5ad06e68c38e1d44da133dba3d02234f159f91a5321214becfa9ab585"
   license "MIT"
   head "https://github.com/andy-sheng/fakeapp.git", branch: "master"
 
