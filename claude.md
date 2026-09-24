@@ -262,6 +262,12 @@ only knows that one. CoreUI loads the main bundle's `Assets.car` via
 hooked that lookup returns nil and every `imageNamed:` / `colorNamed:` / `NSDataAsset`
 from `Assets.car` silently returns nil (loose files in the bundle still load).
 
+**`PDebug/fishhook.{c,h}` must stay on upstream facebook/fishhook ≥ `aadc161` (2021).**
+Older copies only scan `__DATA`, but modern binaries keep `__got` in `__DATA_CONST`, so
+every C hook (BundleID, `dlsym`) silently misses the app's main executable. They also
+lack `struct rebinding.replaced`, so `{name, hook, &orig}` initializers compile with an
+"excess elements" warning and leave `orig` NULL.
+
 ### Build Phases
 
 **Main app "Run Script" phase:**
